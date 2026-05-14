@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NotebookLM PPT Design Prompt Builder</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel (for compiling JSX in browser) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-zinc-950 text-white">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+
+        // ===== 아이콘 컴포넌트 =====
+        const ExternalLink = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        );
+        const Search = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        );
+        const Grid3X3 = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+        );
+
+        // ===== 템플릿 데이터 =====
+        const TEMPLATES = [
+          // ========== 심플 ==========
+          { id: 'minimal', name: '애플 키노트 미니멀', category: '심플', style: { bg: '#FFFFFF', text: '#000000', accent: '#9ca3af', font: 'Helvetica Neue' },
+            mood: 'Apple 키노트, 무인양품(MUJI)', characteristics: ['여백 60% 이상', '요소 3개 이하', '무채색 기반', '얇은 산세리프'], texture: '없음 (순수 평면)', layoutGuide: '제목 정중앙, 위아래 얇은 구분선' },
+          { id: 'monochrome', name: '모노크롬 아트 갤러리', category: '심플', style: { bg: '#000000', text: '#ffffff', accent: '#ffffff', font: 'DM Sans' },
+            mood: 'Karl Lagerfeld, 갤러리 도록', characteristics: ['순수 흑백', '강한 명암 대비', '대담한 타이포', '네거티브 스페이스'], texture: '미세 노이즈 5%', layoutGuide: '검정 배경 + 흰색 대문자, Bold 처리' },
+          { id: 'nordic', name: '휘게 노르딕 인테리어', category: '심플', style: { bg: '#F0F4F8', text: '#2d3748', accent: '#718096', font: 'Inter' },
+            mood: 'IKEA, 코펜하겐 인테리어', characteristics: ['파스텔 뮤트 톤', '둥근 모서리 8px', '자연광 느낌', '따뜻한 기능미'], texture: '린넨 텍스처 3%', layoutGuide: '좌측 정렬, 우상단 원형 장식' },
+          { id: 'wireframe', name: '엔지니어 와이어프레임', category: '심플', style: { bg: '#1a202c', text: '#e2e8f0', accent: '#4299e1', font: 'Roboto Mono' },
+            mood: 'Figma 목업, UI 설계서', characteristics: ['점선 테두리', '플레이스홀더 박스', '모노스페이스', '청사진 그리드'], texture: '도트 그리드 20px', layoutGuide: '점선 프레임, [TITLE] 스타일' },
+          { id: 'paper', name: '학술 화이트 페이퍼', category: '심플', style: { bg: '#FAFAFA', text: '#374151', accent: '#6B7280', font: 'Georgia' },
+            mood: '학술 백서, 공식 문서', characteristics: ['깔끔한 여백', '세리프 본문', '미니멀 장식', '인쇄물 느낌'], texture: '종이 질감 2%', layoutGuide: '상단 제목, 하단 페이지 번호 스타일' },
+          { id: 'muji', name: '무지 에센셜 내추럴', category: '심플', style: { bg: '#F5F5F0', text: '#4A4A4A', accent: '#8B7355', font: 'Noto Sans KR' },
+            mood: 'MUJI 카탈로그, 생활용품', characteristics: ['자연스러운 베이지', '군더더기 없음', '기능 중심', '차분한 톤'], texture: '크래프트 종이 hint', layoutGuide: '중앙 정렬, 최소한의 요소' },
+          { id: 'zen', name: '고요한 젠 가든', category: '심플', style: { bg: '#F7F6F3', text: '#2C2C2C', accent: '#7C8B6F', font: 'Cormorant' },
+            mood: '일본 정원, 다도 문화', characteristics: ['비대칭 균형', '자연 모티프', '고요한 분위기', '세리프 우아함'], texture: '와시 종이 느낌', layoutGuide: '좌측 여백 크게, 우측에 제목' },
+          { id: 'clean', name: 'iOS 시스템 클린', category: '심플', style: { bg: '#FFFFFF', text: '#1F2937', accent: '#3B82F6', font: 'SF Pro Display' },
+            mood: 'iOS 인터페이스, 테크 기업', characteristics: ['시스템 폰트', '파란 포인트', '카드 UI', '그림자 활용'], texture: '없음', layoutGuide: '카드 형태 중앙 배치' },
+          { id: 'cotton', name: '킨포크 퓨어 코튼', category: '심플', style: { bg: '#FFFDFC', text: '#57534E', accent: '#FCA5A5', font: 'Lora' },
+            mood: '킨포크(Kinfolk) 잡지, 따뜻한 오후', characteristics: ['코튼 질감', '부드러운 대비', '여유로운 자간', '감성적인 여백'], texture: '패브릭 질감', layoutGuide: '가운데 정렬, 하단에 작은 포인트' },
+          { id: 'primary_minimal', name: '디터 람스 인더스트리얼', category: '심플', style: { bg: '#F9FAFB', text: '#111827', accent: '#EF4444', font: 'Inter' },
+            mood: '디터 람스(Dieter Rams), 산업 디자인', characteristics: ['절제된 선', '빨간색 원포인트', '기능주의 레이아웃', '그리드 정렬'], texture: '없음', layoutGuide: '좌측 상단 타이틀, 우측 하단 빨간 점' },
+          { id: 'typo_focus', name: '타이포그래피 마스터', category: '심플', style: { bg: '#FFFFFF', text: '#000000', accent: '#D1D5DB', font: 'Oswald' },
+            mood: '타이포그래피 전시, 스위스 포스터', characteristics: ['거대한 폰트 크기', '화면을 꽉 채우는 글자', '단순한 색상', '그리드 파괴'], texture: '없음', layoutGuide: '화면의 80%를 차지하는 볼드 타이포' },
+          { id: 'outline', name: '미니멀 라인 아트', category: '심플', style: { bg: '#FAFAFA', text: '#171717', accent: '#171717', font: 'JetBrains Mono' },
+            mood: '라인 일러스트레이션, 미니멀 타투', characteristics: ['1px 얇은 선', '속이 빈 도형', '모노톤', '여백 중심'], texture: '없음', layoutGuide: '얇은 테두리 박스 안의 텍스트' },
+          { id: 'frost', name: '새벽 안개 프로스트', category: '심플', style: { bg: '#F8FAFC', text: '#475569', accent: '#CBD5E1', font: 'Nunito' },
+            mood: '반투명 아크릴, 새벽 안개', characteristics: ['투명도 활용', '은은한 경계선', '차가운 톤', '가벼운 레이어'], texture: '서리가 내린 유리 느낌', layoutGuide: '흐릿한 배경 위에 얹혀진 부드러운 텍스트' },
+          { id: 'ceramic', name: '무광 도자기 세라믹', category: '심플', style: { bg: '#F5F5F4', text: '#57534E', accent: '#A8A29E', font: 'Quicksand' },
+            mood: '도자기 공예, 오가닉 뷰티 브랜드', characteristics: ['무광 매트', '부드러운 톤온톤', '완만한 곡선', '따뜻한 회갈색'], texture: '무광 도자기 표면', layoutGuide: '화면 중앙에 부드러운 타원형 요소' },
+          { id: 'blue_wash', name: '스카이 블루 워시', category: '심플', style: { bg: '#F0F9FF', text: '#0C4A6E', accent: '#7DD3FC', font: 'Plus Jakarta Sans' },
+            mood: '구름 없는 하늘, 깨끗한 물', characteristics: ['블루 모노톤', '청량한 느낌', '시원한 여백', '신뢰감 있는 구조'], texture: '없음', layoutGuide: '상단 블루 라인, 좌측 정렬된 텍스트' },
+
+          // ========== 모던 ==========
+          { id: 'cyberpunk', name: '네온 사이버펑크 퓨처', category: '모던', style: { bg: '#050505', text: '#00ff9d', accent: '#ff00ff', font: 'Roboto Mono' },
+            mood: 'Blade Runner, CD Projekt', characteristics: ['네온 글로우', '어둠+형광', '글리치 효과', 'HUD 스타일'], texture: '스캔라인 2px', layoutGuide: '네온 글로우 blur 20px, 사이버 프레임' },
+          { id: 'swiss', name: '스위스 그리드 마스터', category: '모던', style: { bg: '#ffffff', text: '#1a1a1a', accent: '#e11d48', font: 'Helvetica' },
+            mood: 'Helvetica 다큐, 국제 양식', characteristics: ['엄격한 그리드', '산세리프', '빨강/검정/흰색', '비대칭 균형'], texture: '없음', layoutGuide: '좌측 빨간 사각형, 그리드 라인 10%' },
+          { id: 'glass', name: '빅서 글래스모피즘', category: '모던', style: { bg: '#E8EEF5', text: '#334155', accent: '#38bdf8', font: 'Inter' },
+            mood: 'iOS Big Sur, Windows 11', characteristics: ['반투명 blur 20px', '밝은 테두리', '그림자 레이어링', '그라데이션 배경'], texture: '프로스티드 글래스', layoutGuide: '중앙 글래스 카드, 그라데이션 메쉬 배경' },
+          { id: 'neon', name: '홍콩 네온 느와르', category: '모던', style: { bg: '#0f0f0f', text: '#f43f5e', accent: '#8b5cf6', font: 'Space Grotesk' },
+            mood: '홍콩 네온, 느와르 영화', characteristics: ['near black 배경', '핑크/퍼플/시안', '글로우 15px', '빈티지 무드'], texture: '도시 노이즈', layoutGuide: '더블 글로우, 하단 반사 효과' },
+          { id: 'bauhaus', name: '바우하우스 지오메트릭', category: '모던', style: { bg: '#f4f4f5', text: '#111', accent: '#eab308', font: 'Futura' },
+            mood: 'Bauhaus 포스터, 몬드리안', characteristics: ['원/삼각/사각', '빨강/노랑/파랑', '굵은 검정선', '기하학 구성'], texture: '없음', layoutGuide: '좌상단 빨간원, 우측 노란사각, 하단 파란바' },
+          { id: 'gradient', name: '오로라 메쉬 그라데이션', category: '모던', style: { bg: '#0F0F1A', text: '#FFFFFF', accent: '#A855F7', font: 'Outfit' },
+            mood: 'Stripe, Linear 웹사이트', characteristics: ['메쉬 그라데이션', '퍼플-블루-핑크', '부드러운 전환', '미래적 느낌'], texture: '메쉬 그라데이션', layoutGuide: '배경 전체 그라데이션, 흰색 텍스트' },
+          { id: 'brutalism', name: '블룸버그 브루탈리즘', category: '모던', style: { bg: '#FFFF00', text: '#000000', accent: '#FF0000', font: 'Times New Roman' },
+            mood: 'Bloomberg, 실험적 웹', characteristics: ['극단적 대비', '기본 폰트', '의도적 불편함', '원색 충돌'], texture: '없음', layoutGuide: '노란 배경에 검정 텍스트, 빨간 밑줄' },
+          { id: 'neumorphism', name: '소프트 UI 뉴모피즘', category: '모던', style: { bg: '#E0E5EC', text: '#2D3748', accent: '#4299E1', font: 'Poppins' },
+            mood: '소프트 UI, 3D 버튼', characteristics: ['볼록/오목 효과', '동일 배경색', '부드러운 그림자', '촉각적 느낌'], texture: '없음', layoutGuide: '볼록한 카드 효과, 부드러운 그림자' },
+          { id: 'dark', name: '깃허브 다크 모드', category: '모던', style: { bg: '#18181B', text: '#FAFAFA', accent: '#22D3EE', font: 'Inter' },
+            mood: 'GitHub Dark, VS Code', characteristics: ['다크 그레이 배경', '밝은 텍스트', '시안 강조', '눈 편안함'], texture: '없음', layoutGuide: '어두운 카드, 시안 포인트' },
+          { id: 'memphis', name: '80s 멤피스 팝', category: '모던', style: { bg: '#FFE4E1', text: '#1A1A2E', accent: '#FF6B6B', font: 'Quicksand' },
+            mood: '80s 멤피스 디자인, 포스트모던', characteristics: ['기하학 패턴', '파스텔+원색', '물결/점/지그재그', '장난스러움'], texture: '기하학 패턴', layoutGuide: '배경에 도형 패턴, 중앙 제목' },
+          { id: 'neo_brutalism', name: '피그마 네오 브루탈리즘', category: '모던', style: { bg: '#FFFBEB', text: '#111827', accent: '#FDBA74', font: 'Public Sans' },
+            mood: 'Figma 커뮤니티, Gumroad 트렌드', characteristics: ['굵은 검정 테두리', '단색 오프셋 그림자', '원색/파스텔 교차', '경쾌함과 직관성'], texture: '미세한 점선 도트', layoutGuide: '굵은 선의 박스로 명확히 나뉜 플랫 레이아웃' },
+          { id: 'bento_grid', name: '애플 벤토 그리드', category: '모던', style: { bg: '#F3F4F6', text: '#1F2937', accent: '#3B82F6', font: 'SF Pro Display' },
+            mood: 'Apple 제품 소개, 모던 대시보드 UI', characteristics: ['모듈형 도시락통 구조', '둥근 모서리', '여백의 일관성', '정보의 깔끔한 구획화'], texture: '없음', layoutGuide: '다양한 크기의 둥근 사각형 카드들이 맞물린 그리드' },
+          { id: 'fluid_organic', name: '플루이드 블롭 오가닉', category: '모던', style: { bg: '#FFFFFF', text: '#334155', accent: '#F472B6', font: 'Poppins' },
+            mood: '크리에이티브 에이전시, 트렌디 스타트업', characteristics: ['비정형 액체(Blob) 형태', '유기적인 곡선', '자연스러운 혼합', '생동감'], texture: '약한 노이즈 필터', layoutGuide: '화면 모서리나 배경에 거대한 비정형 컬러 블롭 배치' },
+          { id: 'holographic', name: 'Web3 홀로그래픽', category: '모던', style: { bg: '#F8FAFC', text: '#0F172A', accent: '#C084FC', font: 'Syne' },
+            mood: 'Web3, 하이엔드 뷰티, 퓨처리스틱 럭셔리', characteristics: ['오색찬란한 진주빛', '메탈릭 포일 반사', '유동적인 빛 무리', '초현실주의'], texture: '무지개빛 반사 필름 텍스처', layoutGuide: '중앙에 홀로그램 질감이 적용된 글래스 요소 배치' },
+          { id: 'minimal_3d', name: '스플라인 3D 소프트', category: '모던', style: { bg: '#F8FAFC', text: '#1E293B', accent: '#818CF8', font: 'Outfit' },
+            mood: '최신 앱 랜딩페이지, Spline 3D 아트', characteristics: ['캔디 컬러 3D', '부드러운 스튜디오 조명', '기하학적 입체 도형', '여백과의 조화'], texture: '매끄럽고 보송한 매트 플라스틱 텍스처', layoutGuide: '한쪽에 볼륨감 있는 3D 오브젝트, 반대편에 산세리프 텍스트' },
+
+          // ========== 비즈니스 ==========
+          { id: 'corporate', name: '매킨지 코퍼레이트 리포트', category: '비즈니스', style: { bg: '#ffffff', text: '#0f172a', accent: '#0ea5e9', font: 'Inter' },
+            mood: 'McKinsey, LinkedIn', characteristics: ['깔끔한 차트', '파란색 신뢰감', '명확한 계층', '프로 사진'], texture: '없음', layoutGuide: '상단 컬러바, 중앙 제목, 하단 날짜' },
+          { id: 'startup', name: 'YC 스타트업 피치덱', category: '비즈니스', style: { bg: '#fff', text: '#111', accent: '#6366F1', font: 'Pretendard' },
+            mood: 'Y Combinator, Airbnb 초기', characteristics: ['임팩트 숫자', '심플 아이콘', '에너지 컬러', '스토리텔링'], texture: '없음', layoutGuide: '"We are changing X" 한 문장 강조' },
+          { id: 'finance', name: '투자은행 파이낸스 데이터', category: '비즈니스', style: { bg: '#064e3b', text: '#ecfdf5', accent: '#34d399', font: 'Lato' },
+            mood: 'Bloomberg Terminal, 투자은행', characteristics: ['어두운 녹색/검정', '형광 녹색', '데이터 테이블', '차트 중심'], texture: '미세 그리드', layoutGuide: '좌측 세로바, 대문자 제목' },
+          { id: 'medical', name: 'WHO 메디컬 헬스케어', category: '비즈니스', style: { bg: '#f0f9ff', text: '#0c4a6e', accent: '#0284c7', font: 'Nunito Sans' },
+            mood: 'WHO, Johns Hopkins', characteristics: ['청결 흰색/하늘색', '의료 아이콘', '신뢰 레이아웃', '명확한 데이터'], texture: '없음', layoutGuide: '상단 로고, 중앙 제목, + 심볼' },
+          { id: 'realestate', name: '럭셔리 리얼 에스테이트', category: '비즈니스', style: { bg: '#1C1C1C', text: '#FFFFFF', accent: '#C9A962', font: 'Cormorant' },
+            mood: '고급 부동산, 건축 잡지', characteristics: ['넓은 사진', '골드 포인트', '미니멀 텍스트', '여백의 미'], texture: '대리석 hint', layoutGuide: '전체 이미지, 하단 골드 바' },
+          { id: 'legal', name: '로펌 리걸 화이트', category: '비즈니스', style: { bg: '#FFFEF5', text: '#1F2937', accent: '#7C3AED', font: 'Garamond' },
+            mood: '로펌, 공식 계약서', characteristics: ['전통 세리프', '보수적 레이아웃', '권위적 컬러', '정돈된 여백'], texture: '양피지 hint', layoutGuide: '중앙 정렬, 상단 로고, 하단 날인' },
+          { id: 'consulting', name: '딜로이트 컨설팅 매트릭스', category: '비즈니스', style: { bg: '#1E3A5F', text: '#FFFFFF', accent: '#00B4D8', font: 'Roboto' },
+            mood: 'BCG, Deloitte 보고서', characteristics: ['네이비 배경', '시안 강조', '데이터 시각화', '매트릭스 레이아웃'], texture: '없음', layoutGuide: '좌측 로고, 우측 제목, 하단 차트' },
+          { id: 'tech', name: '구글 테크 컨퍼런스', category: '비즈니스', style: { bg: '#0A0A0A', text: '#FFFFFF', accent: '#00D084', font: 'SF Pro Display' },
+            mood: 'Apple 발표, Google I/O', characteristics: ['다크 배경', '그린 포인트', '대형 타이포', '제품 중심'], texture: '없음', layoutGuide: '중앙 대형 텍스트, 하단 부제' },
+          { id: 'hr', name: 'HR 인재 채용 브랜딩', category: '비즈니스', style: { bg: '#FDF4FF', text: '#581C87', accent: '#A855F7', font: 'Plus Jakarta Sans' },
+            mood: '채용 브로셔, 회사 소개', characteristics: ['따뜻한 퍼플', '사람 중심', '친근한 무드', '아이콘 활용'], texture: '없음', layoutGuide: '팀 사진 영역, 컬러풀 강조' },
+          { id: 'retail', name: '슈프림 리테일 스트릿', category: '비즈니스', style: { bg: '#FFFFFF', text: '#111827', accent: '#EF4444', font: 'DM Sans' },
+            mood: 'Supreme, 패션 브랜드', characteristics: ['빨간 강조', '볼드 타이포', '제품 포커스', '그리드 레이아웃'], texture: '없음', layoutGuide: '빨간 박스 로고, 큰 제품 이미지' },
+          { id: 'esg_report', name: '지속가능 경영 ESG 그린', category: '비즈니스', style: { bg: '#F4FBF7', text: '#166534', accent: '#22C55E', font: 'Pretendard' },
+            mood: '지속가능성 보고서, 파타고니아 기업 철학', characteristics: ['자연 친화적 색채', '클린 데이터 시각화', '오가닉 셰이프', '신뢰감 있는 여백'], texture: '재생지 느낌', layoutGuide: '나뭇잎 형태의 모서리, 하단 데이터 요약' },
+          { id: 'logistics', name: '페덱스 글로벌 로지스틱스', category: '비즈니스', style: { bg: '#FFFBEB', text: '#1F2937', accent: '#F59E0B', font: 'Oswald' },
+            mood: 'FedEx, Maersk 글로벌 공급망', characteristics: ['경쾌한 옐로우', '굵고 빠른 직선', '화살표 방향성', '프로세스 맵'], texture: '산업용 골판지', layoutGuide: '좌측에서 우측으로 흐르는 화살표 구조' },
+          { id: 'b2b_saas', name: '엔터프라이즈 SaaS 솔루션', category: '비즈니스', style: { bg: '#FFFFFF', text: '#334155', accent: '#6366F1', font: 'Inter' },
+            mood: 'Salesforce, Stripe 엔터프라이즈 피치덱', characteristics: ['소프트웨어 목업', '입체적인 카드 UI', '그라데이션 버튼', '추상적 데이터 플로우'], texture: '없음', layoutGuide: '대시보드 형태의 중앙 배치, 양옆 플로팅 카드' },
+          { id: 'manufacturing', name: '스마트 팩토리 첨단 제조', category: '비즈니스', style: { bg: '#1E293B', text: '#F8FAFC', accent: '#F97316', font: 'Roboto Condensed' },
+            mood: '테슬라 기가팩토리, 중공업 카탈로그', characteristics: ['스틸 블루 배경', '주의/강조 오렌지', '정밀한 그리드선', '기계적인 볼드 타이포'], texture: '메탈릭 헤어라인', layoutGuide: '상단 얇은 안전선, 로보틱스 느낌의 정렬' },
+          { id: 'edtech', name: '에듀테크 게이미피케이션', category: '비즈니스', style: { bg: '#FDF4FF', text: '#4A044E', accent: '#D946EF', font: 'Nunito' },
+            mood: 'Coursera, Duolingo B2B 솔루션', characteristics: ['성취도 그래프', '밝은 파스텔 톤', '라운드 박스', '게이미피케이션 요소'], texture: '없음', layoutGuide: '학습 경로(Path)를 보여주는 지그재그 배치' },
+
+          // ========== 내추럴 ==========
+          { id: 'forest', name: '내셔널 지오그래픽 포레스트', category: '내추럴', style: { bg: '#fcf9ee', text: '#2c3e2e', accent: '#567c5d', font: 'Merriweather' },
+            mood: 'National Geographic, 환경 다큐', characteristics: ['자연 녹색/갈색', '유기적 곡선', '손글씨 믹스', '에코 무드'], texture: '나뭇잎 패턴 subtle', layoutGuide: '자연 일러스트 프레임, 중앙 제목' },
+          { id: 'space', name: '인터스텔라 딥 스페이스', category: '내추럴', style: { bg: '#020617', text: '#e2e8f0', accent: '#6366f1', font: 'Orbitron' },
+            mood: 'NASA, Interstellar', characteristics: ['우주 검정/남색', '별/은하', '미래적 폰트', '빛나는 포인트'], texture: '별 필드', layoutGuide: '별 배경, 제목 글로우, 행성 장식' },
+          { id: 'ocean', name: '블루 플래닛 딥 오션', category: '내추럴', style: { bg: '#0c4a6e', text: '#e0f2fe', accent: '#38bdf8', font: 'Montserrat' },
+            mood: 'Blue Planet, 해양 캠페인', characteristics: ['깊은 파랑 그라데이션', '물결 패턴', '투명감', '수중 느낌'], texture: 'caustics 효과', layoutGuide: '상단→하단 그라데이션, 파도 라인' },
+          { id: 'desert', name: '듄 사하라 데저트', category: '내추럴', style: { bg: '#fff7ed', text: '#7c2d12', accent: '#ea580c', font: 'Lora' },
+            mood: 'Dune 영화, 사막 다큐', characteristics: ['오렌지/베이지', '모래 언덕 곡선', '강한 햇빛', '황금 그라데이션'], texture: '모래 노이즈', layoutGuide: '하단 언덕 실루엣, 상단 태양' },
+          { id: 'aurora', name: '스칸디나비아 오로라', category: '내추럴', style: { bg: '#0F172A', text: '#F0FDF4', accent: '#4ADE80', font: 'Nunito' },
+            mood: '북유럽 오로라, 겨울밤', characteristics: ['그린-퍼플 오로라', '어두운 밤하늘', '신비로운 빛', '자연 현상'], texture: '오로라 그라데이션', layoutGuide: '상단 오로라 효과, 하단 실루엣' },
+          { id: 'botanical', name: '보태니컬 아트 도감', category: '내추럴', style: { bg: '#FEFCE8', text: '#365314', accent: '#84CC16', font: 'Playfair Display' },
+            mood: '식물도감, 보태니컬 아트', characteristics: ['식물 일러스트', '빈티지 그린', '세밀한 디테일', '과학적 레이아웃'], texture: '오래된 종이', layoutGuide: '중앙 식물 일러스트, 라벨 스타일' },
+          { id: 'mountain', name: '파타고니아 알파인', category: '내추럴', style: { bg: '#F1F5F9', text: '#0F172A', accent: '#0369A1', font: 'Montserrat' },
+            mood: '파타고니아, 등산 브랜드', characteristics: ['산 실루엣', '블루 그레이', '아웃도어 무드', '미니멀 자연'], texture: '없음', layoutGuide: '하단 산 실루엣, 상단 대형 텍스트' },
+          { id: 'tropical', name: '열대 휴양지 트로피컬', category: '내추럴', style: { bg: '#ECFDF5', text: '#064E3B', accent: '#F59E0B', font: 'Varela Round' },
+            mood: '하와이, 열대 리조트', characteristics: ['야자수 패턴', '밝은 그린', '옐로우 포인트', '휴양지 무드'], texture: '열대 잎 패턴', layoutGuide: '모서 야자수 장식, 중앙 제목' },
+          { id: 'terracotta', name: '테라코타 찰흙 공방', category: '내추럴', style: { bg: '#FAF4F0', text: '#78350F', accent: '#D97706', font: 'Lora' },
+            mood: '도예 공방, 따뜻한 흙', characteristics: ['토기 질감', '오가닉 브라운', '편안한 무드', '곡선 레이아웃'], texture: '구운 찰흙 텍스처', layoutGuide: '중앙에 둥글고 비정형적인 토기 형태 배경' },
+          { id: 'morning_dew', name: '숲속의 새벽 이슬', category: '내추럴', style: { bg: '#F0FDF4', text: '#166534', accent: '#34D399', font: 'Nunito' },
+            mood: '새벽 숲, 투명한 물방울', characteristics: ['물방울 반사', '투명한 그라데이션', '연한 민트톤', '프레시한 여백'], texture: '유리알 같은 이슬 텍스처', layoutGuide: '빛을 머금은 원형 투명 요소 배치' },
+          { id: 'stone_canyon', name: '그랜드 캐니언 스톤', category: '내추럴', style: { bg: '#E7E5E4', text: '#292524', accent: '#A8A29E', font: 'Montserrat' },
+            mood: '그랜드 캐니언, 거친 암석', characteristics: ['돌 질감', '층이 진 레이아웃', '무게감 있는 무채색', '미니멀 락(Rock)'], texture: '암석과 모래 질감', layoutGuide: '가로로 층이 진 단층 모티프 레이아웃' },
+          { id: 'coral_reef', name: '환상적인 코랄 리프', category: '내추럴', style: { bg: '#FFF1F2', text: '#881337', accent: '#FB7185', font: 'Quicksand' },
+            mood: '열대 바다 속, 화려한 산호', characteristics: ['코랄 핑크', '유기적 바다생물 형태', '활기찬 대비', '곡선 블롭(Blob)'], texture: '은은한 물방울 노이즈', layoutGuide: '코랄색의 유기적인 블롭 테두리' },
+          { id: 'autumn_maple', name: '가을의 단풍 메이플', category: '내추럴', style: { bg: '#FFF7ED', text: '#7C2D12', accent: '#EA580C', font: 'Playfair Display' },
+            mood: '가을 숲, 떨어지는 낙엽', characteristics: ['가을 웜톤', '낙엽 실루엣', '따뜻한 노을빛', '세리프 폰트 우아함'], texture: '마른 나뭇잎 텍스처', layoutGuide: '구석에서 떨어지는 잎사귀 실루엣 데코' },
+          { id: 'glacier', name: '북극 빙하 글래시어', category: '내추럴', style: { bg: '#F8FAFC', text: '#0F172A', accent: '#38BDF8', font: 'Outfit' },
+            mood: '북극 빙산, 차가운 얼음', characteristics: ['날카로운 폴리곤', '시안(Cyan) 그라데이션', '투명한 유리/얼음 질감', '차가운 쿨톤'], texture: '서리가 낀 유리 느낌', layoutGuide: '하단에 날카로운 삼각형 빙산 실루엣' },
+          { id: 'meadow', name: '평화로운 들꽃 언덕', category: '내추럴', style: { bg: '#FEFCE8', text: '#422006', accent: '#EAB308', font: 'Caveat' },
+            mood: '봄날의 들판, 피크닉', characteristics: ['작은 들꽃 장식', '파스텔 옐로우', '부드러운 손글씨 믹스', '평화로운 분위기'], texture: '린넨 돗자리 느낌', layoutGuide: '하단에 데이지꽃 패턴 흩뿌리기' },
+
+          // ========== 럭셔리 ==========
+          { id: 'luxury', name: '롤렉스 골든 아워', category: '럭셔리', style: { bg: '#1c1917', text: '#fafaf9', accent: '#d4af37', font: 'Playfair Display' },
+            mood: 'Rolex, Louis Vuitton', characteristics: ['골드/블랙', '세리프 폰트', '얇은 골드 라인', '대칭 구성'], texture: '미세 노이즈', layoutGuide: '중앙 대칭, 위아래 골드 라인' },
+          { id: 'editorial', name: '보그 하이 패션 에디토리얼', category: '럭셔리', style: { bg: '#f9fafb', text: '#18181b', accent: '#dc2626', font: 'Bodoni Moda' },
+            mood: 'Vogue, Harper\'s Bazaar', characteristics: ['대담한 타이포', '흑백+원포인트', '매거진 그리드', '사진 오버랩'], texture: '없음', layoutGuide: '대형 세리프 제목, 빨간 강조 점' },
+          { id: 'jewelry', name: '티파니 다이아몬드 블루', category: '럭셔리', style: { bg: '#1E1B4B', text: '#E0E7FF', accent: '#C084FC', font: 'Cinzel' },
+            mood: 'Tiffany, Cartier', characteristics: ['딥 퍼플/네이비', '보석 반짝임', '섬세한 디테일', '곡선 우아함'], texture: '벨벳+스파클', layoutGuide: '다이아몬드 프레임, 미세 파티클' },
+          { id: 'champagne', name: '샴페인 골드 웨딩', category: '럭셔리', style: { bg: '#FFFBEB', text: '#78350F', accent: '#D97706', font: 'Cormorant Garamond' },
+            mood: '웨딩, 셀러브레이션', characteristics: ['샴페인 골드', '우아한 서체', '버블 효과', '축하 무드'], texture: '미세 버블', layoutGuide: '아치 프레임, 골드 버블 장식' },
+          { id: 'noir', name: '고급 향수 블랙 느와르', category: '럭셔리', style: { bg: '#000000', text: '#D4D4D8', accent: '#A1A1AA', font: 'Bebas Neue' },
+            mood: '고급 향수, 아트 하우스', characteristics: ['완전한 블랙', '실버 톤', '미스터리', '극적 조명'], texture: '필름 그레인', layoutGuide: '어둠 속 텍스트, 스팟 조명 효과' },
+          { id: 'marble', name: '이탈리안 대리석 마블', category: '럭셔리', style: { bg: '#F5F5F5', text: '#1F2937', accent: '#9CA3AF', font: 'Libre Baskerville' },
+            mood: '럭셔리 호텔, 건축 명품', characteristics: ['대리석 텍스처', '그레이 톤', '클래식 세리프', '고급 소재감'], texture: '마블 패턴', layoutGuide: '마블 배경, 심플 중앙 텍스트' },
+          { id: 'silk', name: '실크 앤 새틴 뷰티', category: '럭셔리', style: { bg: '#FAF5F5', text: '#3F3F46', accent: '#F43F5E', font: 'Cormorant' },
+            mood: '하이엔드 코스메틱, 럭셔리 뷰티', characteristics: ['부드러운 곡선', '진주빛 광택', '여성스러운 무드', '여백의 미'], texture: '매끄럽게 빛나는 실크 텍스처', layoutGuide: '화면을 사선으로 가로지르는 부드러운 곡선 레이아웃' },
+          { id: 'couture', name: '오트 쿠튀르 런웨이', category: '럭셔리', style: { bg: '#2C0E18', text: '#FDF4FF', accent: '#D4AF37', font: 'Bodoni Moda' },
+            mood: '파리 패션위크, 런웨이, 디올', characteristics: ['딥 보르도 컬러', '화려한 장식', '아방가르드', '극적인 대비'], texture: '부드러운 벨벳', layoutGuide: '중앙 집중형 대형 텍스트와 얇고 장식적인 테두리' },
+          { id: 'emerald_velvet', name: '에메랄드 프라이빗 룸', category: '럭셔리', style: { bg: '#064E3B', text: '#F0FDF4', accent: '#D4AF37', font: 'Playfair Display' },
+            mood: 'VIP 멤버십 라운지, 하이엔드 프라이빗 바', characteristics: ['무거운 에메랄드 딥그린', '황동(Brass) 골드 포인트', '무게감 있는 우아함', '클래식'], texture: '빛을 머금은 벨벳', layoutGuide: '정교한 골드 프레임 안쪽으로 텍스트 정렬' },
+          { id: 'royal_navy', name: '로열 패밀리 네이비', category: '럭셔리', style: { bg: '#0F172A', text: '#F8FAFC', accent: '#FBBF24', font: 'Cinzel' },
+            mood: '영국 왕실, 고급 세단 브랜드', characteristics: ['정통 네이비', '문장(Crest) 모티프', '엄격한 대칭적 구조', '기품과 신뢰'], texture: '미세한 캔버스', layoutGuide: '상단 중앙에 앰블럼, 그 아래로 정갈한 텍스트 배치' },
+          { id: 'premium_leather', name: '에르메스 가죽 헤리티지', category: '럭셔리', style: { bg: '#451A03', text: '#FEF3C7', accent: '#D97706', font: 'Lora' },
+            mood: '에르메스 가죽공방, 하이엔드 피혁', characteristics: ['따뜻한 카멜 브라운', '스티치 디테일', '장인정신', '수공예 럭셔리'], texture: '부드러운 카프스킨 가죽 표면', layoutGuide: '가죽 패턴을 이어 붙인 듯한 스티치 구분선' },
+          { id: 'crystal', name: '스와로브스키 크리스탈', category: '럭셔리', style: { bg: '#F8FAFC', text: '#0F172A', accent: '#94A3B8', font: 'Montserrat' },
+            mood: '스와로브스키, 5성급 호텔 로비', characteristics: ['투명도와 굴절', '은빛 반짝임', '다각면 입체감', '차가운 럭셔리'], texture: '투명하고 날카로운 유리 굴절', layoutGuide: '다각면 기하학적 선과 파편 배치' },
+          { id: 'platinum', name: '플래티넘 시계 공학', category: '럭셔리', style: { bg: '#18181B', text: '#E4E4E7', accent: '#A1A1AA', font: 'Inter' },
+            mood: '스위스 하이엔드 시계, 하이퍼카', characteristics: ['브러시드 메탈(Brushed Metal)', '정밀한 기계적 선', '차가운 실버 톤', '미니멀'], texture: '헤어라인 메탈', layoutGuide: '시계 다이얼을 연상시키는 정교한 원형 중심 배열' },
+          { id: 'caviar_black', name: '캐비어 블랙 엑스클루시브', category: '럭셔리', style: { bg: '#09090B', text: '#FAFAFA', accent: '#27272A', font: 'Outfit' },
+            mood: '블랙카드 초청장, 울트라 럭셔리 이벤트', characteristics: ['극단적인 무광 블랙', '유광 블랙 포인트(톤온톤)', '완벽한 절제미', '미스터리'], texture: '질감이 느껴지는 매트한 고급 지류', layoutGuide: '희미하게 빛을 받는 텍스트와 얇은 라인' },
+          { id: 'boutique', name: '니치 퍼퓸 라벨 디자인', category: '럭셔리', style: { bg: '#FFFFF0', text: '#18181B', accent: '#65A30D', font: 'Libre Baskerville' },
+            mood: '조 말론, 딥티크 등 니치 향수 부티크', characteristics: ['아이보리와 블랙의 매치', '클래식한 라벨 디자인', '프렌치 시크', '세련된 세리프'], texture: '고급 인쇄 용지', layoutGuide: '향수병 라벨처럼 중앙에 위치한 직사각형 테두리 정렬' },
+
+          // ========== 레트로 ==========
+          { id: 'synthwave', name: '마이애미 신스웨이브', category: '레트로', style: { bg: '#2e1065', text: '#f0abfc', accent: '#22d3ee', font: 'Righteous' },
+            mood: 'Miami Vice, Stranger Things', characteristics: ['네온 핑크/시안', '선셋 그라데이션', '크롬 텍스트', '야자수/그리드'], texture: 'VHS 노이즈', layoutGuide: '하단 그리드, 크롬 제목, 태양 실루엣' },
+          { id: 'pixel', name: '패밀리 컴퓨터 8비트', category: '레트로', style: { bg: '#18181b', text: '#4ade80', accent: '#fb7185', font: 'Press Start 2P' },
+            mood: '슈퍼마리오, 아케이드', characteristics: ['픽셀 폰트', '제한된 팔레트', '도트 그래픽', '게임 UI'], texture: '픽셀 그리드', layoutGuide: '"PRESS START", 스코어바, 픽셀 프레임' },
+          { id: 'y2k', name: '아이맥 G3 Y2K 퓨처', category: '레트로', style: { bg: '#e0e7ff', text: '#4338ca', accent: '#ec4899', font: 'Orbitron' },
+            mood: '2000년대 초, 초기 아이맥', characteristics: ['투명 플라스틱', '파스텔+메탈릭', '버블/별', '3D 광택'], texture: '글로시 그라데이션', layoutGuide: '광택 타이틀, 별/하트 장식' },
+          { id: 'polaroid', name: '빈티지 앨범 폴라로이드', category: '레트로', style: { bg: '#FFFEF5', text: '#44403C', accent: '#78716C', font: 'Caveat' },
+            mood: '인스탁스, 빈티지 앨범', characteristics: ['흰색 프레임', '바랜 색감', '손글씨 캡션', '필름 느낌'], texture: '종이+세피아', layoutGuide: '폴라로이드 프레임, 하단 손글씨' },
+          { id: 'vinyl', name: '재즈 바이닐 레코드', category: '레트로', style: { bg: '#1C1917', text: '#FCA5A5', accent: '#F87171', font: 'Abril Fatface' },
+            mood: 'Blue Note, 70s 레코드', characteristics: ['따뜻한 아날로그', '레코드 원형', '빈티지 타이포', '노이즈/그레인'], texture: '비닐 그루브', layoutGuide: '레코드판 그래픽, 빈티지 서체' },
+          { id: 'brutalist_retro', name: '콘크리트 브루탈리즘', category: '레트로', style: { bg: '#d1d5db', text: '#000', accent: '#525252', font: 'Archivo Black' },
+            mood: '콘크리트 건축, Raw HTML', characteristics: ['무거운 블록', '고대비 흑백', '거친 텍스처', '투박함'], texture: '콘크리트 노이즈', layoutGuide: '검정 블록 제목, 거친 회색 배경' },
+          { id: 'vhs', name: 'VHS 글리치 비디오', category: '레트로', style: { bg: '#0D0D0D', text: '#FFFFFF', accent: '#FF00FF', font: 'VCR OSD Mono' },
+            mood: 'VHS 테이프, 글리치 아트', characteristics: ['RGB 분리', '스캔라인', '노이즈 왜곡', 'TV 에러'], texture: 'VHS 스캔라인', layoutGuide: 'RGB 분리 텍스트, 트래킹 에러' },
+          { id: 'disco', name: '디스코 나이트 70s', category: '레트로', style: { bg: '#4A1942', text: '#FFD700', accent: '#FF69B4', font: 'Pacifico' },
+            mood: '디스코 클럽, Saturday Night Fever', characteristics: ['미러볼 반짝임', '골드/핑크', '그루비 폰트', '댄스 무드'], texture: '글리터 효과', layoutGuide: '미러볼 요소, 골드 제목' },
+          { id: 'newspaper', name: '뉴욕 타임즈 뉴스페이퍼', category: '레트로', style: { bg: '#F5F5DC', text: '#1A1A1A', accent: '#8B0000', font: 'Playfair Display' },
+            mood: '1920s 신문, 헤드라인', characteristics: ['세리프 헤드라인', '컬럼 레이아웃', '세피아 톤', '빨간 강조'], texture: '오래된 신문지', layoutGuide: '큰 헤드라인, 컬럼 구분선' },
+          { id: 'psychedelic', name: '우드스톡 사이키델릭', category: '레트로', style: { bg: '#FF6B35', text: '#1A1A2E', accent: '#FFE66D', font: 'Rubik Mono One' },
+            mood: '60s 히피, 우드스톡', characteristics: ['물결치는 패턴', '강렬한 원색', '환각적 무드', '유기적 형태'], texture: '물결 패턴', layoutGuide: '물결치는 텍스트, 소용돌이 배경' },
+          { id: 'art_deco', name: '위대한 개츠비 아르데코', category: '레트로', style: { bg: '#1A1A2E', text: '#D4AF37', accent: '#C9A962', font: 'Poiret One' },
+            mood: '1920s 뉴욕, 개츠비', characteristics: ['기하학 패턴', '골드 라인', '대칭 구조', '럭셔리 빈티지'], texture: '기하학 패턴', layoutGuide: '아르데코 프레임, 골드 라인 장식' },
+          { id: 'polaroid_grid', name: '추억의 콜라주 그리드', category: '레트로', style: { bg: '#3D3D3D', text: '#FFFFFF', accent: '#F5F5F5', font: 'Indie Flower' },
+            mood: '추억 사진첩, 콜라주', characteristics: ['여러 프레임 겹침', '테이프 장식', '손글씨 라벨', '비정형 배치'], texture: '코르크 보드', layoutGuide: '겹친 폴라로이드들, 테이프 효과' },
+          { id: 'frutiger_aero', name: '윈도우 비스타 에어로', category: '레트로', style: { bg: '#E0F2FE', text: '#0C4A6E', accent: '#38BDF8', font: 'Trebuchet MS' },
+            mood: '2000년대 후반 UI, Windows Vista, 아쿠아', characteristics: ['글로시한 광택(Glossy)', '투명한 유리와 물방울', '자연과 테크의 결합', '스큐어모피즘'], texture: '매끄러운 유리와 물방울 텍스처', layoutGuide: '화면 중앙에 광택이 나는 구체(Sphere) 배경, 맑은 스카이블루 그라데이션' },
+          { id: 'grunge_90s', name: '그런지 록 얼터너티브', category: '레트로', style: { bg: '#292524', text: '#E7E5E4', accent: '#991B1B', font: 'Courier New' },
+            mood: '90년대 그런지 록 앨범, Ray Gun 매거진', characteristics: ['의도적인 타이포그래피 파괴', '거칠고 탁한 색상', '불규칙한 배치', '반항적 무드'], texture: '구겨지고 찢어진 종이, 거친 잉크 자국', layoutGuide: '겹쳐지고 기울어진 타이포그래피' },
+          { id: 'diner_50s', name: '50s 아메리칸 다이너', category: '레트로', style: { bg: '#CCFBF1', text: '#111827', accent: '#E11D48', font: 'Pacifico' },
+            mood: '1950년대 미국 다이너 식당, 아토믹 에이지', characteristics: ['민트와 체리레드 팝 컬러', '체커보드 패턴', '부메랑 형태 요소', '레트로 네온 스크립트'], texture: '유광 플라스틱과 바이닐(Vinyl) 시트 질감', layoutGuide: '가장자리에 체커보드 패턴 힌트, 중앙에 스크립트 폰트' },
+
+          // ========== 크리에이티브 ==========
+          { id: 'gallery_creative', name: 'MoMA 현대 미술 갤러리', category: '크리에이티브', style: { bg: '#f3f4f6', text: '#111827', accent: '#ec4899', font: 'Abril Fatface' },
+            mood: 'MoMA, 현대미술관', characteristics: ['여백과 오브제', '아티스틱 폰트', '비대칭 레이아웃', '컬러 팝'], texture: '캔버스 subtle', layoutGuide: '컬러 원형+타이틀 오버랩' },
+          { id: 'vivid', name: '앤디 워홀 비비드 팝아트', category: '크리에이티브', style: { bg: '#facc15', text: '#000000', accent: '#2563eb', font: 'Poppins' },
+            mood: 'Andy Warhol, Keith Haring', characteristics: ['원색 대비', '굵은 아웃라인', '에너지 폭발', '반복 패턴'], texture: '하프톤 도트', layoutGuide: '노란 배경, 파란 원, 팝아트 스타일' },
+          { id: 'graffiti', name: '뱅크시 스트릿 그래피티', category: '크리에이티브', style: { bg: '#111', text: '#facc15', accent: '#ec4899', font: 'Permanent Marker' },
+            mood: 'Banksy, 뉴욕 스트릿', characteristics: ['스프레이 효과', '거친 텍스처', '스텐실', '반항적 에너지'], texture: '벽돌 벽', layoutGuide: '스프레이 제목, 드립 효과' },
+          { id: 'collage', name: '다다이즘 매거진 콜라주', category: '크리에이티브', style: { bg: '#fef3c7', text: '#78350f', accent: '#d97706', font: 'Courier Prime' },
+            mood: '다다이즘, 잡지 콜라주', characteristics: ['오려붙인 종이', '폰트 믹스', '테이프/스티커', '레이어 겹침'], texture: '찢어진 종이', layoutGuide: '겹친 종이 조각, 잡지 스타일' },
+          { id: 'watercolor', name: '감성 수채화 일러스트', category: '크리에이티브', style: { bg: '#FFFBF5', text: '#4A4A4A', accent: '#7C9EB2', font: 'Dancing Script' },
+            mood: '수채화 아트, 손그림 일러스트', characteristics: ['번지는 효과', '파스텔 물감', '손글씨 폰트', '부드러운 경계'], texture: '수채화 번짐', layoutGuide: '수채화 얼룩 배경, 손글씨 제목' },
+          { id: 'neon_sign', name: '심야 카페 네온 사인', category: '크리에이티브', style: { bg: '#1A1A2E', text: '#FF6B6B', accent: '#4ECDC4', font: 'Pacifico' },
+            mood: '카페 네온, 밤거리 간판', characteristics: ['네온 튜브 느낌', '글로우 효과', '손글씨 스타일', '밤 분위기'], texture: '벽돌 배경', layoutGuide: '네온 튜브 텍스트, 온/오프 느낌' },
+          { id: 'risograph', name: '리소그래프 인디 프린트', category: '크리에이티브', style: { bg: '#FFF8E1', text: '#E65100', accent: '#1565C0', font: 'Space Mono' },
+            mood: '리소 프린트, 인디 포스터', characteristics: ['판화 느낌', '2-3색 레이어', '오프셋 효과', '그레인 텍스처'], texture: '리소 그레인', layoutGuide: '컬러 레이어 오프셋, 인쇄 느낌' },
+          { id: 'abstract_creative', name: '기하학 추상 미니멀', category: '크리에이티브', style: { bg: '#FAF5FF', text: '#1E1B4B', accent: '#7C3AED', font: 'Sora' },
+            mood: '추상화, 모던 아트', characteristics: ['기하학 형태', '비정형 도형', '퍼플 포인트', '여백 활용'], texture: '없음', layoutGuide: '추상 도형 배경, 심플 텍스트' },
+          { id: 'comic_creative', name: '마블 코믹스 히어로', category: '크리에이티브', style: { bg: '#FFF500', text: '#000000', accent: '#FF0000', font: 'Bangers' },
+            mood: 'Marvel/DC 코믹스', characteristics: ['하프톤 패턴', '말풍선', '액션 라인', '원색+검정'], texture: 'Ben-Day dots', layoutGuide: '폭발 효과, 굵은 테두리' },
+          { id: 'sticker', name: '귀여운 다꾸 스티커 팩', category: '크리에이티브', style: { bg: '#E0F2FE', text: '#0C4A6E', accent: '#F472B6', font: 'Nunito' },
+            mood: '카카오 이모티콘, 스티커', characteristics: ['귀여운 일러스트', '둥근 외곽선', '파스텔 톤', '장난스러움'], texture: '없음', layoutGuide: '스티커 형태 요소들, 흩뿌린 배치' },
+          { id: 'paper_cutout', name: '마티스 페이퍼 컷아웃', category: '크리에이티브', style: { bg: '#F8FAFC', text: '#0F172A', accent: '#F59E0B', font: 'Nunito' },
+            mood: '현대 페이퍼 아트, 마티스(Matisse) 컷아웃', characteristics: ['종이 겹침 효과', '깊은 드롭 섀도우', '유기적인 실루엣', '입체감'], texture: '거친 수채화 종이 텍스처', layoutGuide: '색종이를 오려 여러 겹 겹쳐 붙인 듯한 레이어 형 배치' },
+          { id: 'digital_glitch', name: '디지털 글리치 아방가르드', category: '크리에이티브', style: { bg: '#09090B', text: '#FFFFFF', accent: '#00FF00', font: 'Share Tech Mono' },
+            mood: '데이터 벤딩, 사이버 아방가르드', characteristics: ['의도적 에러 화면', 'RGB 채널 분리', '깨진 픽셀/가로선 왜곡', '디스토피아적'], texture: '데이터 모싱(Datamoshing) 노이즈', layoutGuide: '가로줄 왜곡과 분리된 색상의 텍스트' },
+          { id: 'kinetic_poster', name: '키네틱 타이포 포스터', category: '크리에이티브', style: { bg: '#E11D48', text: '#FFFFFF', accent: '#000000', font: 'Anton' },
+            mood: '스위스 모션 디자인, 타이포그래피 포스터', characteristics: ['극단적으로 늘어난 글자', '화면을 꽉 채우는 밀도', '강렬한 색상 대비', '동적 에너지'], texture: '하프톤(Halftone) 프린트 노이즈', layoutGuide: '거대한 글자가 가로/세로로 무한 반복되는 구조' },
+          { id: 'impasto', name: '반 고흐 임파스토 유화', category: '크리에이티브', style: { bg: '#FFF7ED', text: '#1E3A8A', accent: '#EA580C', font: 'Lora' },
+            mood: '빈센트 반 고흐, 순수 미술 유화', characteristics: ['두꺼운 물감 질감(Impasto)', '거친 붓자국', '자연스럽게 섞인 색채', '아날로그 아트'], texture: '두꺼운 캔버스와 굳은 물감 덩어리', layoutGuide: '배경 전체에 거친 붓터치 텍스처가 겹쳐지고, 중앙에 명확한 세리프 텍스트 얹기' },
+          { id: 'airbrush_dream', name: '에어브러시 몽환 드림코어', category: '크리에이티브', style: { bg: '#FDF4FF', text: '#4A044E', accent: '#A855F7', font: 'Pacifico' },
+            mood: '90s 에어브러시, 로파이(Lo-Fi) 드림코어', characteristics: ['부드럽게 퍼지는 그라데이션', '스프레이 후광 효과', '파스텔톤 몽환성', '크롬(Chrome) 장식'], texture: '부드러운 안개와 미세한 그레인', layoutGuide: '중앙에 뿌연 에어브러시 배경 블롭을 깔고, 곳곳에 반짝임(Sparkle) 배치' },
+
+          // ========== 학술 ==========
+          { id: 'academic', name: '하버드 아카데믹 저널', category: '학술', style: { bg: '#fffbf0', text: '#3f3f46', accent: '#9f1239', font: 'Times New Roman' },
+            mood: 'Harvard 논문, Nature', characteristics: ['세리프 본문', '정돈된 여백', '각주 스타일', '절제된 컬러'], texture: '아이보리 종이', layoutGuide: '중앙 정렬 제목, 저자/기관 하단' },
+          { id: 'history', name: '고문서 역사 다큐멘터리', category: '학술', style: { bg: '#e5e5e5', text: '#451a03', accent: '#78350f', font: 'Noto Serif KR' },
+            mood: '고문서, 역사 다큐', characteristics: ['세피아 톤', '고풍 서체', '손상 효과', '문장 요소'], texture: '양피지 얼룩', layoutGuide: '양피지 배경, 테두리 장식' },
+          { id: 'science', name: 'MIT 사이언스 랩', category: '학술', style: { bg: '#0f172a', text: '#38bdf8', accent: '#22d3ee', font: 'Roboto' },
+            mood: 'MIT Media Lab, 과학 저널', characteristics: ['데이터 시각화', '회로/분자 모티프', '테크 블루', '정밀 그리드'], texture: '회로 패턴', layoutGuide: '다크 배경, 시안 강조, 분자 장식' },
+          { id: 'math', name: '수학 공식 칠판', category: '학술', style: { bg: '#1E293B', text: '#F8FAFC', accent: '#38BDF8', font: 'JetBrains Mono' },
+            mood: '수학 교재, 칠판', characteristics: ['모노스페이스', '수식 레이아웃', '다크 배경', '분필 느낌'], texture: '칠판 텍스처', layoutGuide: '수식 중앙 배치, 분필 스타일' },
+          { id: 'thesis', name: '대학원 학위 논문', category: '학술', style: { bg: '#FFFFFF', text: '#1F2937', accent: '#1E40AF', font: 'Linux Libertine' },
+            mood: '대학원 논문, 학술 발표', characteristics: ['전통 학술 폰트', '넘버링 시스템', '각주/인용', '페이지 구조'], texture: '없음', layoutGuide: '논문 표지 형식, 대학 로고 위치' },
+          { id: 'encyclopedia', name: '브리태니커 백과사전', category: '학술', style: { bg: '#F5F5DC', text: '#2F2F2F', accent: '#8B4513', font: 'Libre Baskerville' },
+            mood: '브리태니커, 도감', characteristics: ['다단 레이아웃', '삽화 스타일', '빈티지 학술', '크로스레퍼런스'], texture: '오래된 책', layoutGuide: '컬럼 레이아웃, 삽화 영역' },
+          { id: 'anatomy', name: '다빈치 해부학 스케치', category: '학술', style: { bg: '#FDF6E3', text: '#5C4033', accent: '#8B0000', font: 'Garamond' },
+            mood: '다빈치 해부도, 식물 세밀화', characteristics: ['펜 스케치 라인', '라틴어 학명', '세밀한 묘사', '클래식'], texture: '거친 양피지 텍스처', layoutGuide: '중앙에 정밀한 스케치 일러스트, 지시선과 주석' },
+          { id: 'astronomy', name: '코페르니쿠스 천문 성도', category: '학술', style: { bg: '#0B1021', text: '#FDE047', accent: '#93C5FD', font: 'Cinzel' },
+            mood: '고전 별자리표, 갈릴레오', characteristics: ['네이비/골드 대비', '별자리 궤도선', '황도12궁 기호', '신비로움'], texture: '오래된 양피지와 별가루', layoutGuide: '원형 성도 중심 배치, 골드 라인' },
+          { id: 'philosophy', name: '니체 철학 고서', category: '학술', style: { bg: '#FFFFFF', text: '#111827', accent: '#991B1B', font: 'Crimson Text' },
+            mood: '칸트, 니체 철학서, 양장본', characteristics: ['엄격한 양쪽 정렬', '넓은 좌우 여백', '거대한 인용 부호', '딥 버건디 포인트'], texture: '고급 인쇄지', layoutGuide: '중앙 집중형 텍스트, 첫 글자 드롭캡' },
+          { id: 'chemistry', name: '유기화학 주기율표', category: '학술', style: { bg: '#171717', text: '#D4D4D4', accent: '#22D3EE', font: 'Roboto Mono' },
+            mood: '유기화학 노트, 실험실', characteristics: ['육각형 벤젠 고리', '모듈형 그리드', '원소 기호 표기', '다크/네온'], texture: '미세 헥사곤 그리드', layoutGuide: '화학 결합선으로 이어진 노드 레이아웃' },
+          { id: 'geology', name: '지질학 단층 지층 구조', category: '학술', style: { bg: '#E7E5E4', text: '#292524', accent: '#9A3412', font: 'Montserrat' },
+            mood: '지층 구조, 광물학 도감', characteristics: ['어스톤 컬러 팔레트', '단층 가로선', '광물 절단면 형태', '자연 과학'], texture: '마블 및 암석 질감', layoutGuide: '화면을 여러 겹의 가로 층(Layers)으로 분할' },
+          { id: 'linguistics', name: '옥스포드 언어학 사전', category: '학술', style: { bg: '#F9FAFB', text: '#1F2937', accent: '#2563EB', font: 'Noto Serif' },
+            mood: '옥스포드 영영사전, 발음기호', characteristics: ['다단 레이아웃', '[발음기호]', '품사 약어(n., v.)', '명확한 정보 위계'], texture: '얇은 사전 종이', layoutGuide: '세로 다단 레이아웃, 단어/발음기호/뜻 수직 배열' },
+          { id: 'economics', name: '거시경제 통계 리포트', category: '학술', style: { bg: '#F3F4F6', text: '#111827', accent: '#DC2626', font: 'Inter' },
+            mood: '경제 리포트, 복잡한 통계', characteristics: ['그레이톤 바탕', '강렬한 빨강/파랑 선', '꺾은선 차트/막대', '데이터 밀도'], texture: '밀리미터 방안지 그리드', layoutGuide: '우상향하는 거대한 차트와 그 아래 빼곡한 데이터' },
+          { id: 'archaeology', name: '피라미드 고고학 현장', category: '학술', style: { bg: '#D6CFC7', text: '#3E2723', accent: '#E65100', font: 'Courier Prime' },
+            mood: '이집트 발굴 현장, 현장 스케치', characteristics: ['모래빛 베이지', '격자망(Grid)', '방향/스케일 바 표기', '건조한 질감'], texture: '거친 흙과 모래', layoutGuide: '발굴 구획을 나눈 격자 배경 위에 유물 스케치' },
+          { id: 'computer_science', name: 'LaTeX 수식 리포트', category: '학술', style: { bg: '#FFFFFF', text: '#000000', accent: '#0000FF', font: 'Latin Modern Roman' },
+            mood: 'arXiv 논문, LaTeX 포맷', characteristics: ['Computer Modern 폰트', '엄격한 흑백', '수식 블록', '알고리즘 슈도코드'], texture: '없음', layoutGuide: '단순한 1단/2단 포맷, Numbered Sections' },
+
+          // ========== 카툰 ==========
+          { id: 'cartoon', name: '어벤져스 팝 코믹스', category: '카툰', style: { bg: '#FFF500', text: '#000000', accent: '#FF0000', font: 'Comic Neue' },
+            mood: 'Marvel 코믹스, 만화책', characteristics: ['하프톤 패턴', '말풍선', '액션 라인', '원색+검정'], texture: 'Ben-Day dots', layoutGuide: '대각선 구도, 폭발 BOOM!' },
+          { id: 'anime', name: '지브리 애니메이션', category: '카툰', style: { bg: '#fff', text: '#000', accent: '#db2777', font: 'Nunito' },
+            mood: '지브리, 일본 애니', characteristics: ['소프트 그라데이션', '빛나는 하이라이트', '파스텔+비비드', '동적 구도'], texture: '글로우 파티클', layoutGuide: '대각선 레이아웃, 반짝임 효과' },
+          { id: 'clay', name: '닌텐도 3D 클레이', category: '카툰', style: { bg: '#f1f5f9', text: '#475569', accent: '#818cf8', font: 'Nunito' },
+            mood: '닌텐도 Kirby, 클레이 렌더', characteristics: ['부드러운 라운드', '파스텔 컬러', '소프트 그림자', '촉감적 느낌'], texture: '클레이 표면', layoutGuide: '둥근 3D 오브젝트, 파스텔 배경' },
+          { id: 'lowpoly', name: '기하학 로우 폴리 아트', category: '카툰', style: { bg: '#1e293b', text: '#e2e8f0', accent: '#14b8a6', font: 'Share Tech Mono' },
+            mood: 'Monument Valley, 폴리곤 아트', characteristics: ['삼각형 면', '플랫 셰이딩', '그라데이션 면', '기하학 풍경'], texture: '없음', layoutGuide: '로우폴리 배경, 면 처리 타이틀' },
+          { id: 'chibi', name: '카와이 치비 캐릭터', category: '카툰', style: { bg: '#FFF0F5', text: '#1A1A2E', accent: '#FF69B4', font: 'Varela Round' },
+            mood: '귀여운 캐릭터, SD 캐릭터', characteristics: ['큰 머리 비율', '동글동글', '핑크 톤', '이모티콘 스타일'], texture: '없음', layoutGuide: '캐릭터 중심, 하트/별 장식' },
+          { id: 'webtoon', name: '네이버 디지털 웹툰', category: '카툰', style: { bg: '#FFFFFF', text: '#000000', accent: '#FF5722', font: 'Nanum Gothic' },
+            mood: '네이버 웹툰, 디지털 만화', characteristics: ['깔끔한 선', '풀컬러', '스크롤 최적화', '현대적 만화'], texture: '없음', layoutGuide: '세로 스크롤 구도, 말풍선 배치' },
+          { id: 'doodle', name: '노트 줄 낙서 두들', category: '카툰', style: { bg: '#FFFEF5', text: '#1F2937', accent: '#EF4444', font: 'Architects Daughter' },
+            mood: '노트 낙서, 손그림', characteristics: ['펜 스케치 느낌', '불완전한 선', '노트 배경', '화살표/별표'], texture: '노트 줄', layoutGuide: '노트 위 낙서 스타일' },
+          { id: 'cartoon_retro', name: '디즈니 빈티지 카툰', category: '카툰', style: { bg: '#FDF6E3', text: '#5C4033', accent: '#D2691E', font: 'Luckiest Guy' },
+            mood: '1930s 디즈니, 고전 애니', characteristics: ['고무호스 스타일', '세피아 톤', '빈티지 캐릭터', '필름 그레인'], texture: '오래된 필름', layoutGuide: '빈티지 프레임, 필름 스크래치' },
+          { id: 'manga', name: '소년 점프 흑백 망가', category: '카툰', style: { bg: '#FFFFFF', text: '#000000', accent: '#000000', font: 'M PLUS Rounded 1c' },
+            mood: '일본 소년 만화, 펜 터치', characteristics: ['흑백 스크린톤', '거친 펜선', '방사형 집중선', '고대비 극적 연출'], texture: '만화 스크린톤 도트/선', layoutGuide: '중앙을 향하는 집중선, 뾰족한 말풍선' },
+          { id: 'pop_art', name: '리히텐슈타인 도트 팝', category: '카툰', style: { bg: '#38BDF8', text: '#111827', accent: '#FDE047', font: 'Bangers' },
+            mood: '로이 리히텐슈타인, 레트로 팝', characteristics: ['거대한 벤데이 도트', '원색(마젠타/시안/옐로)', '두꺼운 검은 테두리', '과장된 표정'], texture: '거대한 원색 하프톤 도트', layoutGuide: '화면 절반을 채우는 도트 패턴과 강렬한 원색 박스' },
+          { id: 'pastel_kawaii', name: '마법소녀 파스텔 스타', category: '카툰', style: { bg: '#FDF4FF', text: '#831843', accent: '#67E8F9', font: 'Quicksand' },
+            mood: '산리오, 세일러문 요술봉, 마법소녀', characteristics: ['솜사탕 파스텔 톤', '반짝이/별/하트', '둥근 외곽선', '소녀 감성'], texture: '몽환적인 스파클과 오로라 글로우', layoutGuide: '모서리에 둥글고 귀여운 구름/별 배치, 반짝임 효과' },
+          { id: 'cel_shading', name: '툰 셰이딩 애니메이션', category: '카툰', style: { bg: '#86EFAC', text: '#064E3B', accent: '#10B981', font: 'Nunito' },
+            mood: '젤다의 전설 바람의 지휘봉, 3D 카툰', characteristics: ['단색 명암(Toon Shading)', '밝고 선명한 톤', '깔끔한 외곽선', '청량한 색채'], texture: '없음', layoutGuide: '그라데이션 없이 명확하게 두 색으로 나뉜 그림자 영역 배치' },
+          { id: 'graphic_novel', name: '다크 그래픽 노블', category: '카툰', style: { bg: '#171717', text: '#F5F5F5', accent: '#991B1B', font: 'Bebas Neue' },
+            mood: '씬 시티(Sin City), 다크 코믹스', characteristics: ['거친 잉크 스플래터', '극단적 흑백+레드 포인트', '느와르 분위기', '무거운 채도'], texture: '수채화/잉크 번짐과 스크래치', layoutGuide: '화면을 사선으로 가르는 분할, 핏빛 레드 강조' },
+          { id: 'retro_anime_90s', name: '시티팝 90s 셀 애니', category: '카툰', style: { bg: '#2E1065', text: '#FDF4FF', accent: '#F472B6', font: 'Kosugi Maru' },
+            mood: '90년대 시티팝, 에반게리온, 세일러문', characteristics: ['셀화 특유의 빛 번짐(Bloom)', '마젠타/네이비 노을 색감', 'CRT 모니터 노이즈', '아련한 무드'], texture: 'CRT 스캔라인과 VHS 노이즈', layoutGuide: '마젠타 노을 하늘 배경, 하단 90년대 자막 폰트' },
+          { id: 'paper_mache', name: '스톱모션 클레이메이션', category: '카툰', style: { bg: '#FDE68A', text: '#451A03', accent: '#EA580C', font: 'Sniglet' },
+            mood: '월레스와 그로밋, 코랄라인', characteristics: ['지점토와 종이 질감', '스톱모션 프레임', '손때 묻은 입체감', '강한 조명 그림자'], texture: '우둘투둘한 지점토/종이 마셰 질감', layoutGuide: '울퉁불퉁한 찰흙 덩어리 형태의 프레임과 강한 드롭 섀도우' },
+
+          // ========== 테크니컬 ==========
+          { id: 'blueprint', name: '설계 도면 블루프린트', category: '테크니컬', style: { bg: '#1e3a8a', text: '#ffffff', accent: '#93c5fd', font: 'Courier New' },
+            mood: '건축 설계도, CAD', characteristics: ['파란 배경+흰 라인', '기술 도면', '치수선/주석', '모노스페이스'], texture: '청사진 그리드', layoutGuide: '점선 테두리, 도면 제목 블록' },
+          { id: 'circuit', name: '전기 회로 PCB 기판', category: '테크니컬', style: { bg: '#064e3b', text: '#34d399', accent: '#fbbf24', font: 'Share Tech' },
+            mood: 'PCB 기판, 전자회로', characteristics: ['녹색/검정', '회로 패턴', '납땜 포인트', '부품 심볼'], texture: '회로 패턴', layoutGuide: '회로 라인이 제목 연결, LED 포인트' },
+          { id: 'infographic', name: '머티리얼 인포그래픽', category: '테크니컬', style: { bg: '#f8fafc', text: '#334155', accent: '#6366f1', font: 'Roboto' },
+            mood: 'Google Material, 데이터 시각화', characteristics: ['플랫 아이콘', '밝은 컬러', '명확한 계층', '심플 차트'], texture: '없음', layoutGuide: '아이콘+제목 조합, 플랫 스타일' },
+          { id: 'map', name: '지리학 국가 지형도', category: '테크니컬', style: { bg: '#fff', text: '#4b5563', accent: '#ef4444', font: 'Inter' },
+            mood: 'National Geographic 지도', characteristics: ['등고선', '위치 마커', '경로 표시', '지도 컬러'], texture: '지형 패턴', layoutGuide: '지도 배경, 빨간 마커' },
+          { id: 'dashboard', name: '대시보드 실시간 관제 UI', category: '테크니컬', style: { bg: '#111827', text: '#F9FAFB', accent: '#10B981', font: 'Inter' },
+            mood: 'Grafana, 관제 시스템', characteristics: ['다크 UI', '실시간 데이터', '그래프 위젯', '상태 표시'], texture: '없음', layoutGuide: '카드 그리드, 숫자 강조' },
+          { id: 'code', name: 'VS Code 다크 에디터', category: '테크니컬', style: { bg: '#1E1E1E', text: '#D4D4D4', accent: '#569CD6', font: 'Fira Code' },
+            mood: 'VS Code, 개발자 IDE', characteristics: ['모노스페이스', '신택스 하이라이팅', '다크 테마', '라인 넘버'], texture: '없음', layoutGuide: '코드 블록 스타일, 컬러 키워드' },
+          { id: 'terminal', name: '매트릭스 해커 터미널', category: '테크니컬', style: { bg: '#000000', text: '#00FF00', accent: '#00FF00', font: 'IBM Plex Mono' },
+            mood: 'Matrix, 해커 터미널', characteristics: ['검정 배경', '녹색 텍스트', '커서 깜빡임', '명령어 스타일'], texture: 'CRT 스캔라인', layoutGuide: '$ 프롬프트, 타이핑 효과' },
+          { id: 'diagram', name: '시스템 플로우차트', category: '테크니컬', style: { bg: '#FFFFFF', text: '#374151', accent: '#3B82F6', font: 'Nunito Sans' },
+            mood: 'Miro, 프로세스 다이어그램', characteristics: ['도형 연결', '화살표 플로우', '컬러 노드', '명확한 구조'], texture: '없음', layoutGuide: '박스 연결, 화살표 흐름' },
+          { id: 'wire_hologram', name: '아이언맨 HUD 홀로그램', category: '테크니컬', style: { bg: '#020617', text: '#7DD3FC', accent: '#0EA5E9', font: 'Orbitron' },
+            mood: '아이언맨 HUD, 3D 매핑', characteristics: ['야광 시안(Cyan) 선', '어두운 배경', '투시 투영(Perspective)', '미래지향적'], texture: '미세 픽셀과 네온 글로우', layoutGuide: '화면 중앙에 3D 입체 투시도 느낌의 와이어프레임 오브젝트' },
+          { id: 'server_rack', name: '데이터센터 서버 랙', category: '테크니컬', style: { bg: '#18181B', text: '#A1A1AA', accent: '#22C55E', font: 'Share Tech Mono' },
+            mood: 'AWS 데이터센터, 백엔드 인프라', characteristics: ['랙 유닛(U) 구조', '초록/빨강 깜빡이는 LED', '메탈릭 프레임', '규칙적인 패턴'], texture: '금속 통풍구(Mesh) 패턴', layoutGuide: '가로로 긴 서버 랙 레이아웃, 포트와 상태 표시등 배치' },
+          { id: 'api_docs', name: '스웨거 API 문서', category: '테크니컬', style: { bg: '#FFFFFF', text: '#334155', accent: '#3B82F6', font: 'Source Code Pro' },
+            mood: '개발자 도구, RESTful API 가이드', characteristics: ['[GET] [POST] 컬러 뱃지', 'JSON 블록', '엔드포인트 표기', '매뉴얼 구조'], texture: '없음', layoutGuide: '접이식 아코디언 UI 형태, 상태 코드(200, 404) 컬러 강조' },
+          { id: 'radar_sonar', name: '군사 레이더 탐지기', category: '테크니컬', style: { bg: '#002200', text: '#4ADE80', accent: '#86EFAC', font: 'Space Mono' },
+            mood: '군함 통제실, 잠수함 소나기', characteristics: ['동심원 그리드', '초록색 스위프 라인', '표적(Target) 마커', '방위각 표기'], texture: '레이더 스캐닝 잔상, 브라운관 느낌', layoutGuide: '화면 중앙에 거대한 레이더 동심원, 반투명 스위프 잔상' },
+          { id: 'cad_model', name: '엔지니어링 CAD 렌더링', category: '테크니컬', style: { bg: '#E2E8F0', text: '#1E293B', accent: '#EA580C', font: 'Roboto' },
+            mood: 'SolidWorks, 산업 기계 설계', characteristics: ['회색 솔리드(Solid) 렌더', '주황/파랑 엣지 하이라이트', 'XYZ 축 인디케이터', '회전/줌 컨트롤러 UI'], texture: '매트한 찰흙 질감의 무광 렌더링', layoutGuide: '아이소메트릭(Isometric) 뷰로 놓인 3D 모델 구조' },
+          { id: 'data_viz', name: '인공 신경망 데이터망', category: '테크니컬', style: { bg: '#0B0F19', text: '#E2E8F0', accent: '#A855F7', font: 'Inter' },
+            mood: '데이터 사이언스, 인공지능 신경망', characteristics: ['무수히 연결된 점(Node)과 선', '별자리 같은 파티클', '다크 사이언스', '복잡계 시각화'], texture: '빛나는 파티클 노이즈', layoutGuide: '점과 선으로 이어진 복잡한 거미줄 네트워크 배경' },
+          { id: 'aviation', name: '전투기 조종석 HUD', category: '테크니컬', style: { bg: '#172554', text: '#00FF00', accent: '#8B4513', font: 'Share Tech Mono' },
+            mood: '전투기 HUD, 비행 계기판(Artificial Horizon)', characteristics: ['파랑(하늘)/갈색(땅) 분할', '고도/속도계 숫자 테이프', '피치(Pitch) 사다리 선', '밀리터리 그린 텍스트'], texture: '유리에 반사된 HUD 잔상', layoutGuide: '화면 상하는 파랑, 하단은 갈색, 중앙에 수평 인디케이터' },
+
+          // ========== 크래프트 ==========
+          { id: 'sketch', name: '연필 소묘 스케치북', category: '크래프트', style: { bg: '#ffffff', text: '#57534e', accent: '#ef4444', font: 'Permanent Marker' },
+            mood: '디자이너 스케치북, 브레인스토밍', characteristics: ['연필/펜 드로잉', '거친 선', '메모/화살표', '낙서 느낌'], texture: '스케치북 종이', layoutGuide: '손글씨 제목, 동그라미/화살표 강조' },
+          { id: 'vintage_paper', name: '올드 타자기 빈티지 문서', category: '크래프트', style: { bg: '#f5f5dc', text: '#4a4a4a', accent: '#8b4513', font: 'Courier Prime' },
+            mood: '오래된 타자기, 빈티지 문서', characteristics: ['타자기 폰트', '바랜 종이', '잉크 번짐', '스탬프'], texture: '오래된 종이+커피 얼룩', layoutGuide: '타자기체 제목, 문서 스탬프' },
+          { id: 'origami', name: '기하학 종이접기 오리가미', category: '크래프트', style: { bg: '#fff', text: '#333', accent: '#f97316', font: 'Quicksand' },
+            mood: '오리가미, 페이퍼아트', characteristics: ['종이 접힘', '그림자 입체감', '폴드 라인', '파스텔/화이트'], texture: '종이 질감', layoutGuide: '종이접기 형태, 그림자 표현' },
+          { id: 'embroidery', name: '십자수 한땀 핸드메이드', category: '크래프트', style: { bg: '#FFFEF5', text: '#1F2937', accent: '#DC2626', font: 'Lora' },
+            mood: '십자수, 자수 공예', characteristics: ['스티치 패턴', '천 텍스처', '전통 문양', '수공예 느낌'], texture: '린넨 천', layoutGuide: '자수 프레임, 스티치 텍스트' },
+          { id: 'woodblock', name: '전통 목판화 인쇄', category: '크래프트', style: { bg: '#FDF6E3', text: '#1A1A2E', accent: '#8B0000', font: 'Crimson Text' },
+            mood: '전통 목판 인쇄, 우키요에', characteristics: ['판화 텍스처', '제한된 색상', '강한 윤곽선', '전통 느낌'], texture: '나무결+잉크 번짐', layoutGuide: '목판 스타일 일러스트, 한자 느낌' },
+          { id: 'letterpress', name: '프리미엄 활판 인쇄', category: '크래프트', style: { bg: '#F5F5F0', text: '#2D2D2D', accent: '#B8860B', font: 'Josefin Sans' },
+            mood: '활자 인쇄, 명함 프레스', characteristics: ['눌린 자국', '잉크 불균일', '클래식 타이포', '장인 느낌'], texture: '압인 효과', layoutGuide: '눌린 텍스트 효과, 심플 레이아웃' },
+          { id: 'scrapbook', name: '트래블 다이어리 스크랩', category: '크래프트', style: { bg: '#FDE68A', text: '#451A03', accent: '#EF4444', font: 'Caveat' },
+            mood: '여행 다이어리, 마스킹 테이프, 티켓', characteristics: ['마스킹 테이프', '구겨진 종이조각', '폴라로이드와 우표', '손글씨와 잡지 스크랩 믹스'], texture: '크래프트지와 코르크 보드', layoutGuide: '콜라주처럼 사진과 테이프 조각들이 겹쳐진 배치' },
+          { id: 'stained_glass', name: '스테인드 글라스 창문', category: '크래프트', style: { bg: '#171717', text: '#FDF4FF', accent: '#EAB308', font: 'Cinzel' },
+            mood: '대성당 창문, 빛의 예술', characteristics: ['굵은 검정 납선(Lead)', '투명도 있는 다채로운 색상', '기하학적/종교적 문양', '빛 통과 효과'], texture: '반짝이는 울퉁불퉁한 유리 표면', layoutGuide: '다각형으로 쪼개어 각각 다른 색 유리 배치' },
+          { id: 'leather_craft', name: '이탈리안 가죽 공예', category: '크래프트', style: { bg: '#78350F', text: '#FEF3C7', accent: '#D97706', font: 'PT Serif' },
+            mood: '피혁 공방, 통가죽 다이어리', characteristics: ['딥 브라운/카멜', '타공 스티치 라인', '불박(Embossing) 로고', '묵직한 고급스러움'], texture: '거칠고 두꺼운 소가죽 표면', layoutGuide: '가장자리에 가죽 재봉선, 중앙 눌린 글씨' },
+          { id: 'knitting', name: '포근한 니트 뜨개질', category: '크래프트', style: { bg: '#FFF1F2', text: '#881337', accent: '#FDA4AF', font: 'Quicksand' },
+            mood: '겨울 스웨터, 포근한 털실', characteristics: ['털실의 질감', '꽈배기(Cable) 패턴', '따뜻한 파스텔/웜톤', '핸드메이드 감성'], texture: '포근한 털실과 짜임새', layoutGuide: '물결 모양의 털실 라인이 화면을 부드럽게 가로지름' },
+          { id: 'kintsugi', name: '킨츠기 도자기 복원', category: '크래프트', style: { bg: '#1C1917', text: '#F5F5F4', accent: '#D4AF37', font: 'Cormorant' },
+            mood: '일본 전통 도자기 수리, 와비사비(Wabi-sabi)', characteristics: ['깨진 틈을 메운 금선', '어두운 도자기 바탕', '불완전한 아름다움', '우아한 여백'], texture: '유약이 발린 도자기와 반짝이는 금박', layoutGuide: '금색 균열이 어두운 바탕을 불규칙하게 가로지르는 배치' },
+          { id: 'chalkboard', name: '브런치 카페 초크아트', category: '크래프트', style: { bg: '#14532D', text: '#F8FAFC', accent: '#FDE047', font: 'Architects Daughter' },
+            mood: '카페 메뉴판, 칠판 낙서', characteristics: ['다크 그린 배경', '분필 가루 날림', '레트로 필기체', '손그림 리본/화살표'], texture: '지우개 자국이 남은 거친 칠판', layoutGuide: '상단에 분필 리본 배너, 분필 느낌의 지그재그 테두리' },
+          { id: 'patchwork', name: '조각보 패치워크 퀼트', category: '크래프트', style: { bg: '#FFF8E1', text: '#3E2723', accent: '#0284C7', font: 'Lora' },
+            mood: '조각보, 퀼트 공예', characteristics: ['서로 다른 패턴의 천 조각', '바느질 땀', '아기자기한 색감', '포근함'], texture: '다양한 면/린넨 천 질감 혼합', layoutGuide: '사각형 그리드에 각각 다른 무늬 배치' },
+          { id: 'paper_quilling', name: '나선형 페이퍼 퀼링', category: '크래프트', style: { bg: '#F8FAFC', text: '#1E293B', accent: '#EC4899', font: 'Playfair Display' },
+            mood: '종이 말기 공예, 우아한 종이 부조', characteristics: ['나선형으로 말린 종이 띠', '세밀한 곡선 입체감', '화려한 꽃/문양', '그림자로 입체감 표현'], texture: '종이의 측면과 약한 그림자', layoutGuide: '제목 주변을 나선형의 종이 꽃 문양이 감싸는 형태' },
+          { id: 'resin_art', name: '영롱한 레진 플라워', category: '크래프트', style: { bg: '#E0F2FE', text: '#0C4A6E', accent: '#FBBF24', font: 'Montserrat' },
+            mood: '투명 레진 공예, 압화(말린 꽃)와 금박', characteristics: ['유리같이 투명하고 볼록한 질감', '내부에 갇힌 금박/글리터', '워터 마블링', '영롱함'], texture: '볼록하고 투명한 글로시 코팅', layoutGuide: '레진 블롭(Blob) 안에 금가루가 퍼져있는 배치' },
+
+          // ========== 재미 ==========
+          { id: 'secret', name: 'CIA 1급 기밀문서', category: '재미', style: { bg: '#f3f3f3', text: '#000000', accent: '#ff0000', font: 'Special Elite' },
+            mood: 'CIA 문서, 스파이 영화', characteristics: ['검열 마킹', 'TOP SECRET 스탬프', '파일 폴더', '타자기 폰트'], texture: '오래된 서류', layoutGuide: '"TOP SECRET" 스탬프, 검열 바' },
+          { id: 'warning', name: '공사장 위험 경고', category: '재미', style: { bg: '#fbbf24', text: '#000000', accent: '#000000', font: 'Bangers' },
+            mood: '공사장 경고, 위험 표지', characteristics: ['노랑/검정 줄무늬', '경고 아이콘', '대문자 볼드', '빨간 강조'], texture: '금속 표면', layoutGuide: '대각선 테두리, ⚠️ 아이콘' },
+          { id: 'kid', name: '크레파스 어린이 그림', category: '재미', style: { bg: '#fff', text: '#000', accent: '#f472b6', font: 'Comic Neue' },
+            mood: '그림일기, 초등학교 게시판', characteristics: ['크레용 느낌', '무지개 색', '귀여운 그림', '손글씨'], texture: '도화지', layoutGuide: '🌈⭐ 장식, 동글동글 글씨' },
+          { id: 'bsod', name: '죽음의 블루스크린 에러', category: '재미', style: { bg: '#0000AA', text: '#FFFFFF', accent: '#FFFFFF', font: 'Courier Prime' },
+            mood: 'Windows 에러, 시스템 오류', characteristics: ['파란 배경 #0000AA', '흰색 고정폭', '에러 코드', '시스템 메시지'], texture: 'CRT 느낌', layoutGuide: 'BSOD 레이아웃, STOP 코드' },
+          { id: 'win95', name: '추억의 윈도우 95 UI', category: '재미', style: { bg: '#008080', text: '#000', accent: '#c0c0c0', font: 'MS Sans Serif' },
+            mood: 'Windows 95/98 UI', characteristics: ['회색 UI', '3D 버튼', '클래식 아이콘', '시스템 폰트'], texture: '없음', layoutGuide: '윈도우 타이틀바, 확인/취소 버튼' },
+          { id: 'loading', name: '고전 게임 로딩 스크린', category: '재미', style: { bg: '#000000', text: '#FFFFFF', accent: '#00FF00', font: 'Press Start 2P' },
+            mood: 'PS1 로딩, 게임 부팅', characteristics: ['프로그레스 바', '팁 메시지', '게임 폰트', '대기 화면'], texture: '없음', layoutGuide: '로딩 바, "Please Wait" 메시지' },
+          { id: 'receipt', name: '마트 편의점 영수증', category: '재미', style: { bg: '#FFFEF5', text: '#000000', accent: '#000000', font: 'Courier New' },
+            mood: '마트 영수증, 주문서', characteristics: ['모노스페이스', '점선 구분', '가격 정렬', '열전사 느낌'], texture: '영수증 종이', layoutGuide: '영수증 형식, 가격 우측 정렬' },
+          { id: 'meme', name: '인터넷 밈 레전드', category: '재미', style: { bg: '#FFFFFF', text: '#000000', accent: '#FF0000', font: 'Impact' },
+            mood: '인터넷 밈, SNS 짤', characteristics: ['Impact 폰트', '상단/하단 텍스트', '검정 외곽선', '강렬한 임팩트'], texture: '없음', layoutGuide: '상단 텍스트 + 하단 텍스트 구조' },
+          { id: 'wanted_poster', name: '서부극 현상수배 원티드', category: '재미', style: { bg: '#E7D5B3', text: '#291002', accent: '#7A2E15', font: 'Rye' },
+            mood: '서부극 현상수배 전단지, 해적 현상금', characteristics: ['거대한 WANTED 타이틀', '현상금 숫자($)', '구겨지고 탄 가장자리', '거친 목판 인쇄 폰트'], texture: '구겨지고 빛바랜 황색 종이', layoutGuide: '상단 WANTED, 중앙 이미지 박스, 하단 현상금' },
+          { id: 'tarot_card', name: '신비로운 타로 카드', category: '재미', style: { bg: '#1E1B4B', text: '#FEF08A', accent: '#D97706', font: 'Cinzel Decorative' },
+            mood: '중세 마법, 점성술, 아르누보 무드', characteristics: ['화려한 금박 테두리 장식', '해/달/별 모티프', '신비로운 딥 퍼플 배경', '대칭적 구도'], texture: '매트한 카드 재질과 반짝이는 금박', layoutGuide: '둥근 프레임이 있고 중앙 심볼 배치' },
+          { id: 'board_game', name: '부루마불 보드게임 판', category: '재미', style: { bg: '#F0FDF4', text: '#111827', accent: '#EF4444', font: 'Fredoka One' },
+            mood: '모노폴리, 부루마불, 주사위 게임', characteristics: ['색색의 사각형 칸(Path)', '게임 말과 주사위 아이콘', 'START/GO 표시', '유쾌한 원색'], texture: '두꺼운 보드지', layoutGuide: '화면 테두리를 따라 나열된 주사위 게임 칸 구조' },
+          { id: 'casino', name: '카지노 잭팟 슬롯', category: '재미', style: { bg: '#064E3B', text: '#FFFFFF', accent: '#FACC15', font: 'Rye' },
+            mood: '라스베가스 슬롯머신, 트럼프 카드 테이블', characteristics: ['초록색 펠트(Felt) 배경', '스페이드/하트 문양', '번쩍이는 전구 프레임', '골드/레드 화려함'], texture: '포커 테이블의 보풀 일어난 펠트 천', layoutGuide: '가장자리에 깜빡이는 네온 전구 프레임' },
+          { id: 'comic_sans', name: '추억의 워드아트 디자인', category: '재미', style: { bg: '#FFFF00', text: '#FF00FF', accent: '#00FFFF', font: 'Comic Sans MS' },
+            mood: '2000년대 초반 초등학생 PPT, B급 감성', characteristics: ['무지개색 WordArt', '눈 아픈 보색 대비', '불필요한 클립아트', 'Comic Sans 폰트'], texture: '없음 (순수 원색 덩어리)', layoutGuide: '구부러진 무지개 텍스트와 뜬금없는 별모양 배경' },
+          { id: 'pop_up_book', name: '입체 팝업 동화책', category: '재미', style: { bg: '#F8FAFC', text: '#1E293B', accent: '#3B82F6', font: 'Quicksand' },
+            mood: '펼치면 튀어나오는 동화책, 장난감', characteristics: ['접힌 종이가 일어선 입체감', '플랫 3D 일러스트', '동화적 색감', '아래로 깔리는 짙은 그림자'], texture: '두꺼운 마분지 느낌', layoutGuide: '바닥 면과 세워진 면이 90도를 이루는 입체적 시점' },
+          { id: 'error_404', name: '페이지 없음 404 고장', category: '재미', style: { bg: '#F1F5F9', text: '#475569', accent: '#EF4444', font: 'Roboto Mono' },
+            mood: '웹사이트 페이지를 찾을 수 없음, 귀여운 고장', characteristics: ['끊어진 케이블/고장난 로봇 아이콘', '404 대형 텍스트', '"Not Found" 문구', '회색빛 허무함'], texture: '없음', layoutGuide: '거대한 404 글자 주변에 깨진 링크 아이콘' },
+
+          // ========== 소셜 / 미디어 ==========
+          { id: 'insta_feed', name: '인스타 감성 피드', category: '소셜 / 미디어', style: { bg: '#FAFAFA', text: '#262626', accent: '#E1306C', font: 'Helvetica' },
+            mood: '세련된 인플루언서 피드, 감성 마케팅', characteristics: ['정방형(1:1) 메이슨리 그리드', '감성적인 사진 필터', '깔끔한 산세리프 폰트', '해시태그 5개 제한'], texture: '부드러운 그레인', layoutGuide: '상단 프로필, 중앙 정방형 이미지, 하단 5개 해시태그 배치' },
+          { id: 'streaming_ux', name: '넷플릭스 시네마틱', category: '소셜 / 미디어', style: { bg: '#000000', text: '#FFFFFF', accent: '#E50914', font: 'Bebas Neue' },
+            mood: '넷플릭스 오리지널, 다큐멘터리 예고편', characteristics: ['어두운 다크모드 배경', '강렬한 레드 포인트', '와이드 스크린 비율', '대작 영화 포스터 타이포'], texture: '어두운 비네팅(Vignetting) 효과', layoutGuide: '배경 전체 풀사이즈 이미지, 하단 대형 타이틀' },
+          { id: 'music_player', name: '스포티파이 플레이어', category: '소셜 / 미디어', style: { bg: '#121212', text: '#FFFFFF', accent: '#1DB954', font: 'Circular' },
+            mood: '스포티파이, 애플 뮤직, 감성 플레이리스트', characteristics: ['중앙 배치 앨범 아트', '재생/정지 버튼 UI', '프로그레스 바', '아티스트와 제목 텍스트'], texture: '배경 블러 그라데이션', layoutGuide: '상단 커버, 하단 재생 컨트롤러' },
+          { id: 'messenger_chat', name: '애플 아이메시지', category: '소셜 / 미디어', style: { bg: '#F2F2F7', text: '#000000', accent: '#007AFF', font: 'SF Pro Text' },
+            mood: '아이메시지(iMessage), 카카오톡 대화방', characteristics: ['양옆으로 오가는 말풍선 레이아웃', '둥근 모서리', '친근한 대화형 카피', '읽음 확인 표시'], texture: '없음', layoutGuide: '좌/우로 배치된 말풍선(Bubble) 텍스트' },
+          { id: 'notion_workspace', name: '노션 워크스페이스', category: '소셜 / 미디어', style: { bg: '#FFFFFF', text: '#37352F', accent: '#EA4646', font: 'Inter' },
+            mood: '노션(Notion), 생산성 툴, 깔끔한 기획서', characteristics: ['극단적인 흑백 미니멀리즘', '이모지(Emoji) 헤더', '블록(Block) 형태의 문단', '체크박스 리스트'], texture: '없음', layoutGuide: '좌측 상단 큰 이모지, 명확한 들여쓰기' },
+          { id: 'yt_thumbnail', name: '유튜브 어그로 썸네일', category: '소셜 / 미디어', style: { bg: '#282828', text: '#FFFFFF', accent: '#FF0000', font: 'Impact' },
+            mood: '100만 유튜버, 어그로 썸네일, 예능 콘텐츠', characteristics: ['굵은 아웃라인 텍스트', '강렬한 보색 대비', '과장된 표정이나 텍스트', '화면을 뚫고 나오는 배치'], texture: '경쾌한 집중선 배경', layoutGuide: '텍스트가 화면 1/3을 덮을 정도로 큼직하게 배치' },
+          { id: 'reels_shortform', name: '틱톡 도파민 릴스', category: '소셜 / 미디어', style: { bg: '#000000', text: '#FFFFFF', accent: '#FE2C55', font: 'Proxima Nova' },
+            mood: '틱톡, 릴스, 도파민 폭발 숏폼', characteristics: ['세로형 9:16 비율 힌트', '우측 플로팅 아이콘', '가독성 높은 키네틱 자막', '전체 화면 꽉 차는 영상'], texture: '화면 테두리 약한 그림자', layoutGuide: '중앙 강렬한 자막 텍스트, 우측 사이드 버튼' },
+          { id: 'twitch_stream', name: '트위치 게이머 스트림', category: '소셜 / 미디어', style: { bg: '#0E0E10', text: '#EFEFF1', accent: '#9146FF', font: 'Roobert' },
+            mood: '트위치, 라이브 방송', characteristics: ['보라색 포인트', '웹캠 프레임', '채팅창 오버레이', '도네이션 알림 배너'], texture: 'LED 백라이트 느낌', layoutGuide: '모서리 웹캠 박스, 채팅 라인' },
+          { id: 'podcast_audio', name: '팟캐스트 오디오 웨이브', category: '소셜 / 미디어', style: { bg: '#1A1A1A', text: '#FFFFFF', accent: '#8B5CF6', font: 'Montserrat' },
+            mood: '심야 라디오, 전문적인 인터뷰', characteristics: ['소리 파동(Soundwave)', '마이크 모티프 아이콘', '대담한 인용구(Quote)', '어둡고 차분한 분위기'], texture: '은은한 그라데이션 노이즈', layoutGuide: '중앙 인터뷰 텍스트, 하단 오디오 웨이브' },
+          { id: 'vlog_diary', name: '감성 브이로그 필름', category: '소셜 / 미디어', style: { bg: '#FFFAF0', text: '#57534E', accent: '#EF4444', font: 'Courier Prime' },
+            mood: '감성 브이로그, 일상 기록', characteristics: ['VHS 타임스탬프 (REC 🔴)', '캠코더 배터리 아이콘', '하단 중앙 캡션 자막', '따뜻한 일상톤'], texture: '필름 번(Film burn) 효과', layoutGuide: '구석 REC 표시, 하단 중앙 자막' },
+          { id: 'y2k_highteen', name: 'Y2K 핑크 하이틴', category: '소셜 / 미디어', style: { bg: '#FDF2F8', text: '#831843', accent: '#EC4899', font: 'Comic Sans MS' },
+            mood: '가십걸, 하이틴 잡지, 폴더폰 감성', characteristics: ['쨍한 핫핑크', '반짝이는 글리터 별', '키치한 스티커', '두툼한 버블 폰트'], texture: '글리터(Glitter) 텍스처', layoutGuide: '콜라주처럼 스티커들이 겹쳐진 자유로운 배치' },
+          { id: 'kpop_polco', name: '포카 꾸미기 폴꾸', category: '소셜 / 미디어', style: { bg: '#F0FDF4', text: '#14532D', accent: '#A855F7', font: 'Varela Round' },
+            mood: '아이돌 포카 꾸미기, 탑로더 데코', characteristics: ['홀로그램 투명 반사', '알파벳 스티커', '다꾸 스타일', '파스텔톤 프레임'], texture: '홀로그램 스파클 텍스처', layoutGuide: '폴라로이드 사진 프레임 위에 붙여진 스티커 배치' },
+          { id: 'lofi_chill', name: '로파이 새벽 공부', category: '소셜 / 미디어', style: { bg: '#2E1065', text: '#FDE047', accent: '#F97316', font: 'VT323' },
+            mood: '24/7 Lo-Fi study girl, 새벽 플레이리스트', characteristics: ['퍼플/오렌지 노을빛', '픽셀 아트 힌트', '아날로그 카세트테이프', '향수어린 감성'], texture: 'VHS 스캔라인과 약한 블러', layoutGuide: '아련한 색감 배경, 픽셀 폰트 제목' },
+          { id: 'metaverse_vtuber', name: '버튜버 메타버스', category: '소셜 / 미디어', style: { bg: '#020617', text: '#F8FAFC', accent: '#06B6D4', font: 'Orbitron' },
+            mood: '버튜버(V-Tuber), 사이버 아이돌', characteristics: ['시안/마젠타 빛', '3D 홀로그램 컬러', '팝업 이펙트', '미래지향적 팬덤'], texture: '네온 글로우와 파티클', layoutGuide: '빛이 뿜어져 나오는 배경, 팝업 텍스트 뱃지' },
+          { id: 'dating_app', name: '틴더 스와이프 매칭', category: '소셜 / 미디어', style: { bg: '#FEF2F2', text: '#111827', accent: '#FE3C72', font: '#FFFFFF' },
+            mood: '틴더(Tinder), 범블, 매칭 성공', characteristics: ['큰 프로필 카드', '빨간색 X와 녹색 하트(♥) 버튼', '화사한 코랄 그라데이션', '직관적 UI'], texture: '없음', layoutGuide: '중앙 꽉 차는 세로형 카드, 하단 액션 버튼' },
+          { id: 'street_webzine', name: '하입비스트 스트릿 웹진', category: '소셜 / 미디어', style: { bg: '#000000', text: '#FFFFFF', accent: '#D9F99D', font: 'Archivo Black' },
+            mood: '하입비스트(Hypebeast), 스니커즈 드롭', characteristics: ['고대비 흑백', '네온 라임 포인트', '브루탈리즘 레이아웃', '타이포 오버랩'], texture: '필름 노이즈', layoutGuide: '거대한 네온 타이포그래피' },
+          { id: 'digital_newsletter', name: '서브스택 뉴스레터', category: '소셜 / 미디어', style: { bg: '#FAFAFA', text: '#171717', accent: '#2563EB', font: 'Georgia' },
+            mood: '모닝브루, 서브스택(Substack)', characteristics: ['이메일 UI 느낌', '가독성 높은 여백', '세리프(제목)+산세리프(본문)', '명확한 구독 버튼'], texture: '없음', layoutGuide: '상단 헤더 라인, 중앙 텍스트, [Read More] 버튼' },
+          { id: 'link_in_bio', name: '링크트리 프로필', category: '소셜 / 미디어', style: { bg: '#F3F4F6', text: '#1F2937', accent: '#10B981', font: 'DM Sans' },
+            mood: '인플루언서 멀티링크, Linktree', characteristics: ['모바일 세로형 비율', '버튼 스택(Stack) 구조', '중앙 프로필 원형', '플랫 디자인'], texture: '없음', layoutGuide: '상단 이미지, 하단 둥근 직사각형 버튼 스택' },
+          { id: 'community_thread', name: '레딧 커뮤니티 스레드', category: '소셜 / 미디어', style: { bg: '#DAE0E6', text: '#1C1C1C', accent: '#FF4500', font: 'Verdana' },
+            mood: '레딧(Reddit), 트위터 타래', characteristics: ['계층구조 들여쓰기', '업보트/다운보트 화살표', '정보 밀집형 UI', '라이트/다크 분할'], texture: '없음', layoutGuide: '좌측 투표 화살표, 우측 들여쓰기된 텍스트' },
+          { id: 'pinterest_moodboard', name: '핀터레스트 영감 무드보드', category: '소셜 / 미디어', style: { bg: '#FFFFFF', text: '#111111', accent: '#E60023', font: 'Helvetica Neue' },
+            mood: '디자이너 영감 수집 피드', characteristics: ['높이가 다른 사각형 블록들', '메이슨리(Masonry) 레이아웃', '부드러운 섀도우', '둥근 모서리 카드'], texture: '없음', layoutGuide: '벽돌처럼 엇갈려 쌓인 그리드 배치' }
+        ];
+
+        // 카테고리 추출 및 정렬
+        const uniqueCategories = Array.from(new Set(TEMPLATES.map(t => t.category))).sort((a, b) => a.localeCompare(b, 'ko-KR'));
+        const CATEGORIES = ['전체', ...uniqueCategories];
+
+        // ===== 프롬프트 생성 함수 =====
+        const generatePrompt = (template) => {
+          const { name, style, mood, characteristics, texture, layoutGuide } = template;
+          return `[NotebookLM Slide Design Prompt]
+
+■ 역할: 전문 콘텐츠 전략가 및 프레젠테이션 디자이너
+■ 핵심 스타일: ${name} 기반의 ${mood} 컨셉
+
+[1. 컬러 및 폰트 시스템]
+
+배경: ${style.bg}
+
+텍스트: ${style.text}
+
+강조: ${style.accent}
+
+폰트: ${style.font} (헤드라인은 Bold, 본문은 Regular 적용)
+
+[2. 정보 배치 및 레이아웃 원칙]
+
+분석적 배치: 제공된 소스 내용을 분석하여, 핵심 개념 설명은 가독성 높은 '요약 텍스트'로 배치하고, 프로세스나 수치는 ${characteristics[0]} 스타일의 '구조적 그래픽'으로 변환하여 혼합할 것.
+
+그리드 정렬: ${layoutGuide}의 원칙을 엄격히 준수하며, 모든 요소가 시각적 질서를 가질 수 있도록 그리드 시스템에 맞춰 정렬함.
+
+여백의 미: ${characteristics.join(', ')}의 특징을 극대화하기 위해 정보 밀도를 치밀하게 조절하여 슬라이드 내 충분한 여백을 확보하고 시각적 피로도를 최소화함.
+
+[3. 텍스트 및 시각 요소의 조화]
+
+가독성 중심 텍스트: 본문은 핵심 키워드 중심의 불렛 포인트(Bullet point)를 사용하되, 스타일 특성에 맞춘 문장 간격을 두어 정보를 한눈에 파악할 수 있도록 구성.
+
+절제된 인포그래픽: ${texture} 질감이 반영된 그래픽을 정보를 설명하는 보조 수단으로 활용함. 불필요한 장식은 배제하고 단순한 선, 면, 숫자 강조를 사용하여 정보의 위계만 명확히 표시함.
+
+비대칭 균형: 텍스트 덩어리와 시각적 요소(또는 여백)를 비대칭으로 배치하여 ${name} 특유의 현대적이고 세련된 레이아웃을 구현.
+
+[4. 그래픽 모티프]
+
+심플 아이콘: 장식적인 묘사는 지양하고, 해당 스타일의 컨셉에 부합하는 기하학적 형태의 최소화된 기호만 사용함.
+
+강조 기법: 강조색(${style.accent})은 가장 중요한 단 하나의 키워드 또는 인포그래픽의 결정적인 데이터 수치에만 전략적으로 사용함.
+
+[5. 출력 가이드라인]
+
+구조: 슬라이드별로 [제목 - 핵심 요약 - 세부 내용(텍스트/그래픽 혼합)]의 논리적 흐름을 유지할 것.
+
+제약: 한 슬라이드에 너무 많은 정보를 담지 않도록 내용을 논리적 단위로 분할하여 구성하고, ${characteristics[characteristics.length - 1]}의 미학을 유지할 것.`;
+        };
+
+        // ===== 썸네일 컴포넌트 =====
+        const StyleThumbnail = ({ template }) => {
+          const { style, id } = template;
+          const renderElements = () => {
+            switch(id) {
+              case 'minimal': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-px" style={{backgroundColor: style.accent}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-3 text-[8px]" style={{color: style.text}}>Apple</div></>;
+              case 'monochrome': return <><div className="absolute inset-3 border" style={{borderColor: style.text+'40'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] font-bold" style={{color: style.text}}>B&W</div></>;
+              case 'nordic': return <><div className="absolute top-3 left-3 w-6 h-6 rounded-full border-2" style={{borderColor: style.accent}}/><div className="absolute bottom-3 left-3 text-[8px]" style={{color: style.text}}>Hygge</div></>;
+              case 'wireframe': return <><div className="absolute inset-2 border border-dashed" style={{borderColor: style.accent}}/><div className="absolute bottom-2 right-2 text-[6px] font-mono" style={{color: style.accent}}>[UI]</div></>;
+              case 'paper': return <><div className="absolute top-4 left-4 right-4 h-1 rounded" style={{backgroundColor: style.text+'30'}}/><div className="absolute top-7 left-4 right-8 h-1 rounded" style={{backgroundColor: style.text+'20'}}/></>;
+              case 'muji': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded border" style={{borderColor: style.accent}}/><div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[7px]" style={{color: style.text}}>MUJI</div></>;
+              case 'zen': return <><div className="absolute top-4 right-4 w-10 h-10 rounded-full border" style={{borderColor: style.accent+'60'}}/><div className="absolute bottom-4 left-4 text-[8px] italic" style={{color: style.text}}>Zen</div></>;
+              case 'clean': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-10 rounded-lg shadow-md" style={{backgroundColor: '#fff'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-1 rounded" style={{backgroundColor: style.accent}}/></>;
+              case 'cotton': return <><div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full" style={{backgroundColor: style.accent}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-serif" style={{color: style.text}}>Pure</div></>;
+              case 'primary_minimal': return <><div className="absolute top-3 left-3 w-8 h-0.5" style={{backgroundColor: style.text}}/><div className="absolute bottom-3 right-3 w-2.5 h-2.5 rounded-full" style={{backgroundColor: style.accent}}/></>;
+              case 'typo_focus': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[16px] font-black tracking-tighter" style={{color: style.text}}>A</div></>;
+              case 'outline': return <><div className="absolute inset-3 border" style={{borderColor: style.text}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[7px] font-mono" style={{color: style.text}}>Line</div></>;
+              case 'frost': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-8 border rounded-lg bg-white/40 flex items-center justify-center" style={{borderColor: style.accent}}><span className="text-[6px]" style={{color: style.text}}>Frost</span></div></>;
+              case 'ceramic': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-8 rounded-[1rem]" style={{backgroundColor: style.accent+'40'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[7px]" style={{color: style.text}}>Matte</div></>;
+              case 'blue_wash': return <><div className="absolute top-0 left-0 right-0 h-1" style={{backgroundColor: style.accent}}/><div className="absolute top-1/2 left-3 -translate-y-1/2 text-[8px] font-bold" style={{color: style.text}}>Wash</div></>;
+
+              case 'cyberpunk': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-mono" style={{color: style.text, textShadow: `0 0 10px ${style.text}`}}>NEON</div></>;
+              case 'swiss': return <><div className="absolute top-0 left-1/3 w-px h-full" style={{backgroundColor: style.accent+'30'}}/><div className="absolute top-3 left-3 w-10 h-2" style={{backgroundColor: style.accent}}/><div className="absolute top-6 left-3 text-[7px] font-bold" style={{color: style.text}}>GRID</div></>;
+              case 'glass': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-8 rounded-lg bg-white/40 border border-white/60 flex items-center justify-center"><span className="text-[7px]" style={{color: style.text}}>Glass</span></div></>;
+              case 'neon': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-2 py-1 rounded-full text-[8px]" style={{color: style.text, backgroundColor: style.text+'20', boxShadow: `0 0 15px ${style.text}`}}>NOIR</div></>;
+              case 'bauhaus': return <><div className="absolute top-3 left-3 w-8 h-8 rounded-full bg-red-500"/><div className="absolute top-8 right-4 w-6 h-6 bg-yellow-400"/><div className="absolute bottom-3 left-6 w-10 h-2 bg-blue-500"/></>;
+              case 'gradient': return <><div className="absolute inset-0 bg-gradient-to-br from-purple-600 via-pink-500 to-blue-500 opacity-80"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-bold text-white">Mesh</div></>;
+              case 'brutalism': return <><div className="absolute top-3 left-3 right-3 h-6" style={{backgroundColor: style.accent}}/><div className="absolute bottom-3 left-3 text-[8px] font-bold" style={{color: style.text}}>RAW</div></>;
+              case 'neumorphism': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-xl" style={{backgroundColor: style.bg, boxShadow: '4px 4px 8px #b8bcc2, -4px -4px 8px #ffffff'}}/></>;
+              case 'dark': return <><div className="absolute top-3 left-3 right-3 h-8 rounded" style={{backgroundColor: '#27272a'}}/><div className="absolute bottom-3 right-3 w-3 h-3 rounded-full" style={{backgroundColor: style.accent}}/></>;
+              case 'memphis': return <><div className="absolute top-3 right-3 w-6 h-6 rounded-full" style={{backgroundColor: '#FF6B6B'}}/><div className="absolute top-1/2 left-1/3 w-8 h-2" style={{backgroundColor: '#FFE66D'}}/></>;
+              case 'neo_brutalism': return <><div className="absolute top-2 left-2 w-10 h-6 bg-orange-300 border-2 border-black" style={{boxShadow: '2px 2px 0 #000'}}/></>;
+              case 'bento_grid': return <><div className="absolute inset-2 grid grid-cols-3 grid-rows-2 gap-1"><div className="bg-gray-200 rounded-md col-span-2 row-span-2"/><div className="bg-blue-200 rounded-md"/><div className="bg-gray-300 rounded-md"/></div></>;
+              case 'fluid_organic': return <><div className="absolute top-1 left-1 w-12 h-10 bg-pink-300/40" style={{borderRadius: '40% 60% 70% 30%'}}/><div className="absolute bottom-1 right-1 w-8 h-8 bg-blue-300/40" style={{borderRadius: '60% 40% 30% 70%'}}/></>;
+              case 'holographic': return <><div className="absolute inset-0 bg-gradient-to-tr from-purple-400/30 via-pink-300/30 to-cyan-300/30 blur-sm"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-2 py-1 bg-white/30 backdrop-blur-md rounded-full border border-white/50 text-[6px] font-bold">HOLO</div></>;
+              case 'minimal_3d': return <><div className="absolute top-1/2 right-3 -translate-y-1/2 w-8 h-8 rounded-full bg-indigo-300" style={{boxShadow: 'inset -3px -3px 6px rgba(0,0,0,0.1), inset 3px 3px 6px rgba(255,255,255,0.6)'}}/></>;
+
+              case 'corporate': return <><div className="absolute top-0 left-0 right-0 h-3" style={{backgroundColor: style.accent}}/><div className="absolute top-6 left-3 text-[8px] font-semibold" style={{color: style.text}}>Report</div></>;
+              case 'startup': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center"><div className="text-[9px] font-bold" style={{color: style.text}}>$1B</div><div className="w-12 h-1 rounded mt-1" style={{backgroundColor: style.accent}}/></div></>;
+              case 'finance': return <><div className="absolute top-3 left-3 text-[8px] font-bold" style={{color: style.text}}>+24%</div><div className="absolute bottom-3 left-3 right-3 flex items-end gap-0.5 h-6">{[40,60,80].map((h,i)=><div key={i} className="flex-1 rounded-t" style={{height:`${h}%`, backgroundColor: style.accent}}/>)}</div></>;
+              case 'medical': return <><div className="absolute top-3 right-3 text-base">➕</div><div className="absolute bottom-4 left-3 text-[8px]" style={{color: style.text}}>Health</div></>;
+              case 'realestate': return <><div className="absolute inset-3 border-2" style={{borderColor: style.accent}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[7px]" style={{color: style.accent}}>ESTATE</div></>;
+              case 'legal': return <><div className="absolute inset-3 border-2" style={{borderColor: style.accent+'30'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] font-serif" style={{color: style.text}}>Law</div></>;
+              case 'consulting': return <><div className="absolute top-3 left-3 w-4 h-4 rounded" style={{backgroundColor: style.accent}}/><div className="absolute bottom-3 left-3 text-[7px] font-bold" style={{color: style.text}}>Deloitte</div></>;
+              case 'tech': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[12px] font-bold" style={{color: style.text}}>Tech</div><div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full" style={{backgroundColor: style.accent}}/></>;
+              case 'hr': return <><div className="absolute top-3 left-3 flex -space-x-1">{[0,1,2].map(i=><div key={i} className="w-4 h-4 rounded-full border-2" style={{backgroundColor: style.accent+(i*20), borderColor: style.bg}}/>)}</div></>;
+              case 'retail': return <><div className="absolute top-3 left-3 px-1.5 py-0.5" style={{backgroundColor: style.accent}}><span className="text-[7px] font-bold text-white">SALE</span></div></>;
+              case 'esg_report': return <><div className="absolute top-1/2 left-3 -translate-y-1/2 w-8 h-8 bg-green-500/20" style={{borderRadius: '0 50% 50% 50%'}}/><div className="absolute bottom-3 right-3 text-[7px] font-bold" style={{color: style.text}}>ESG</div></>;
+              case 'logistics': return <><div className="absolute top-1/2 left-2 right-2 h-1 bg-amber-400"/><div className="absolute top-1/2 right-2 -translate-y-1/2 w-0 h-0 border-y-[4px] border-y-transparent border-l-[6px] border-l-amber-500"/> </>;
+              case 'b2b_saas': return <><div className="absolute inset-2 border rounded shadow-sm bg-white" style={{borderColor: style.accent+'30'}}><div className="h-2 border-b bg-indigo-50" style={{borderColor: style.accent+'20'}}/></div><div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[6px] font-bold" style={{color: style.accent}}>SaaS</div></>;
+              case 'manufacturing': return <><div className="absolute top-0 left-0 right-0 h-1" style={{backgroundImage: 'repeating-linear-gradient(45deg, #F97316, #F97316 2px, transparent 2px, transparent 4px)'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 border border-slate-500 rounded-full flex items-center justify-center"><div className="w-4 h-4 bg-orange-500"/></div></>;
+              case 'edtech': return <><div className="absolute inset-x-3 top-1/2 h-0.5 bg-fuchsia-200"/><div className="absolute top-1/2 left-4 w-2 h-2 -translate-y-1/2 rounded-full bg-fuchsia-500"/><div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[6px] font-bold" style={{color: style.text}}>EDU</div></>;
+
+              case 'forest': return <><div className="absolute top-3 left-1/2 -translate-x-1/2 text-base">🌿</div><div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[7px]" style={{color: style.text}}>Nature</div></>;
+              case 'space': return <>{[...Array(10)].map((_,i)=><div key={i} className="absolute w-1 h-1 rounded-full bg-white" style={{top:`${Math.random()*100}%`, left:`${Math.random()*100}%`, opacity: Math.random()*0.8+0.2}}/>)}<div className="absolute bottom-3 right-3 w-5 h-5 rounded-full bg-indigo-600"/></>;
+              case 'ocean': return <><div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/20 to-transparent"/><div className="absolute bottom-2 right-2 text-base">🌊</div></>;
+              case 'desert': return <><svg className="absolute bottom-0 left-0 right-0 h-8" viewBox="0 0 100 30" preserveAspectRatio="none"><path d="M0,30 Q25,10 50,20 T100,15 L100,30 Z" fill={style.accent+'60'}/></svg></>;
+              case 'aurora': return <><div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-green-400/40 via-purple-500/30 to-transparent"/><div className="absolute bottom-3 left-3 text-[8px]" style={{color: style.text}}>Aurora</div></>;
+              case 'botanical': return <><div className="absolute top-3 left-3 text-base">🌱</div><div className="absolute bottom-3 right-3 text-[7px] italic" style={{color: style.accent}}>Botanical</div></>;
+              case 'mountain': return <><svg className="absolute bottom-0 left-0 right-0 h-10" viewBox="0 0 100 40"><polygon points="0,40 30,10 50,25 70,5 100,40" fill={style.accent+'30'}/></svg></>;
+              case 'tropical': return <><div className="absolute top-2 right-2 text-base">🌴</div><div className="absolute bottom-3 left-3 text-[8px]" style={{color: style.text}}>Island</div></>;
+              case 'terracotta': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-10 bg-amber-700/20" style={{borderRadius: '40% 60% 50% 50%'}}/><div className="absolute bottom-3 left-3 text-[7px] font-serif" style={{color: style.text}}>Clay</div></>;
+              case 'morning_dew': return <><div className="absolute top-4 right-4 w-4 h-4 rounded-full bg-white/60 shadow-sm border border-white/80"/><div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[7px] font-bold" style={{color: style.accent}}>Dew</div></>;
+              case 'stone_canyon': return <><div className="absolute bottom-0 left-0 right-0 h-4 bg-stone-300/80"/><div className="absolute bottom-4 left-0 right-0 h-3 bg-stone-200/80"/><div className="absolute top-3 left-3 text-[8px] font-bold tracking-widest" style={{color: style.text}}>Rock</div></>;
+              case 'coral_reef': return <><div className="absolute top-2 right-2 text-base">🪸</div><div className="absolute bottom-3 left-3 text-[8px] font-bold" style={{color: style.accent}}>Coral</div></>;
+              case 'autumn_maple': return <><div className="absolute top-2 left-2 text-base">🍂</div><div className="absolute bottom-3 right-3 text-[8px] font-serif" style={{color: style.accent}}>Maple</div></>;
+              case 'glacier': return <><svg className="absolute bottom-0 left-0 w-full h-1/2" viewBox="0 0 100 50" preserveAspectRatio="none"><polygon points="0,50 30,20 50,40 80,10 100,50" fill={style.accent+'30'}/></svg><div className="absolute top-3 left-3 text-[7px] font-bold" style={{color: style.text}}>Ice</div></>;
+              case 'meadow': return <><div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-sm flex gap-1">🌼 🌿</div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px]" style={{color: style.text, fontFamily: 'cursive'}}>Meadow</div></>;
+
+              case 'luxury': return <><div className="absolute top-3 left-1/2 -translate-x-1/2 w-8 h-px" style={{backgroundColor: style.accent}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] tracking-widest" style={{color: style.accent}}>LUXE</div></>;
+              case 'editorial': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[11px] font-serif font-bold" style={{color: style.text}}>VOGUE</div></>;
+              case 'jewelry': return <><div className="absolute top-3 right-3 w-4 h-4 rotate-45 border" style={{borderColor: style.accent}}/><div className="absolute bottom-3 left-3 text-[7px] tracking-widest" style={{color: style.text}}>TIFFANY</div></>;
+              case 'champagne': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px]" style={{color: style.accent}}>🥂</div></>;
+              case 'noir': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full" style={{background: `radial-gradient(circle at 30% 30%, ${style.accent}, transparent 70%)`}}/><div className="absolute bottom-3 left-3 text-[7px] tracking-widest" style={{color: style.text}}>NOIR</div></>;
+              case 'marble': return <><div className="absolute inset-0 opacity-20" style={{background: `linear-gradient(45deg, ${style.accent}20 25%, transparent 25%, transparent 75%, ${style.accent}20 75%)`}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] font-serif" style={{color: style.text}}>Marble</div></>;
+              case 'silk': return <><div className="absolute inset-0 bg-gradient-to-tr from-rose-100/50 via-stone-100/50 to-rose-50/50 opacity-80"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-serif italic" style={{color: style.text}}>Silk</div></>;
+              case 'couture': return <><div className="absolute inset-2 border border-dotted" style={{borderColor: style.accent}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] font-serif tracking-widest" style={{color: style.accent}}>H-C</div></>;
+              case 'emerald_velvet': return <><div className="absolute inset-3 border" style={{borderColor: style.accent}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] font-serif" style={{color: style.text}}>VIP</div></>;
+              case 'royal_navy': return <><div className="absolute top-2 left-1/2 -translate-x-1/2 w-4 h-5 border-b-2 border-x-2 rounded-b-full" style={{borderColor: style.accent}}/><div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[7px] font-serif tracking-widest" style={{color: style.text}}>ROYAL</div></>;
+              case 'premium_leather': return <><div className="absolute inset-2 border border-dashed" style={{borderColor: style.accent+'80'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[6px] font-serif tracking-widest" style={{color: style.accent}}>HERITAGE</div></>;
+              case 'crystal': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rotate-45 border" style={{borderColor: style.accent}}/><div className="absolute bottom-2 left-2 text-[6px] font-mono tracking-widest" style={{color: style.text}}>CRYSTAL</div></>;
+              case 'platinum': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full border" style={{background: 'conic-gradient(from 0deg, #3f3f46, #e4e4e7, #3f3f46)'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-zinc-900"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[5px] font-mono" style={{color: style.text}}>SWISS</div></>;
+              case 'caviar_black': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[12px] font-black" style={{color: '#27272a', textShadow: '1px 1px 0 rgba(255,255,255,0.05)'}}>BLACK</div></>;
+              case 'boutique': return <><div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-14 border flex flex-col items-center justify-center bg-white" style={{borderColor: style.text}}><div className="text-[5px] mb-1 text-black">❁</div><div className="text-[4px] font-serif uppercase tracking-widest text-black">Parfum</div></div></>;
+
+              case 'synthwave': return <><div className="absolute bottom-0 left-0 right-0 h-1/2" style={{background: `linear-gradient(to top, ${style.accent}40, transparent)`}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-bold" style={{color: style.text, textShadow: `2px 2px 0 ${style.accent}`}}>RETRO</div></>;
+              case 'pixel': return <><div className="absolute top-3 left-3 grid grid-cols-4 gap-0.5">{[...Array(8)].map((_,i)=><div key={i} className="w-1.5 h-1.5" style={{backgroundColor: i%3===0?style.accent:style.text, opacity:i%2===0?1:0.5}}/>)}</div><div className="absolute bottom-2 right-2 text-[6px] font-mono" style={{color: style.text}}>8-BIT</div></>;
+              case 'y2k': return <><div className="absolute top-3 right-3 w-5 h-5 rounded-full border-2" style={{borderColor: style.accent}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-bold" style={{color: style.text}}>Y2K</div></>;
+              case 'polaroid': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 bg-white shadow"><div className="w-full h-8 bg-gray-200"/><div className="p-1 text-[5px] text-center" style={{color: style.text}}>Memory</div></div></>;
+              case 'vinyl': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full border-4" style={{borderColor: style.text+'40'}}><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full" style={{backgroundColor: style.accent}}/></div></>;
+              case 'brutalist_retro': return <><div className="absolute top-3 left-3 right-3 h-6" style={{backgroundColor: style.accent}}/><div className="absolute bottom-3 left-3 text-[8px] font-black" style={{color: style.text}}>RAW</div></>;
+              case 'vhs': return <><div className="absolute inset-0 opacity-30" style={{background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-mono" style={{color: style.text, textShadow: '2px 0 #ff0000, -2px 0 #00ffff'}}>VHS</div></>;
+              case 'disco': return <><div className="absolute top-3 right-3 w-6 h-6 rounded-full" style={{background: 'conic-gradient(from 0deg, gold, silver, gold)'}}/><div className="absolute bottom-3 left-3 text-[8px]" style={{color: style.text}}>DISCO</div></>;
+              case 'newspaper': return <><div className="absolute top-2 left-2 right-2 border-b-2" style={{borderColor: style.text}}/><div className="absolute top-4 left-2 text-[8px] font-serif font-bold" style={{color: style.text}}>TIMES</div></>;
+              case 'psychedelic': return <><div className="absolute inset-0" style={{background: `radial-gradient(circle at 30% 70%, ${style.accent}, ${style.bg})`}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] font-bold" style={{color: style.text}}>GROOVY</div></>;
+              case 'art_deco': return <><div className="absolute inset-2 border" style={{borderColor: style.accent}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[7px] tracking-widest" style={{color: style.accent}}>DECO</div></>;
+              case 'polaroid_grid': return <>{[0,1,2].map(i=><div key={i} className="absolute w-8 h-10 bg-white shadow" style={{top: 8+i*5, left: 10+i*10, transform: `rotate(${(i-1)*10}deg)`}}><div className="w-full h-6 bg-gray-300"/></div>)}</>;
+              case 'frutiger_aero': return <><div className="absolute inset-0 bg-gradient-to-b from-sky-100 to-sky-300"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-gradient-to-br from-white/80 to-blue-400/30 border border-white/60 backdrop-blur-sm shadow-lg"/><div className="absolute bottom-2 right-2 text-[6px] font-bold" style={{color: style.text}}>AERO</div></>;
+              case 'grunge_90s': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-8 bg-red-900/60 -rotate-3 mix-blend-multiply"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[12px] font-mono font-black tracking-tighter rotate-2" style={{color: style.text}}>GRUNGE</div></>;
+              case 'diner_50s': return <><div className="absolute top-0 right-0 w-6 h-full flex flex-wrap content-start opacity-20">{[...Array(24)].map((_,i)=><div key={i} className="w-3 h-3" style={{backgroundColor: (Math.floor(i/2) + i)%2===0?style.text:'transparent'}}/>)}</div><div className="absolute top-1/2 left-3 -translate-y-1/2 text-[11px]" style={{color: style.accent, fontFamily: 'cursive'}}>Diner</div></>;
+
+              case 'gallery_creative': return <><div className="absolute top-4 right-4 w-8 h-8 rounded-full" style={{backgroundColor: style.accent+'60'}}/><div className="absolute bottom-4 left-4 text-[9px] font-bold italic" style={{color: style.text}}>MoMA</div></>;
+              case 'vivid': return <><div className="absolute top-3 right-3 w-5 h-5 rounded-full" style={{backgroundColor: style.accent}}/><div className="absolute top-1/2 left-4 text-[10px] font-black" style={{color: style.text}}>POP</div></>;
+              case 'graffiti': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] font-black -rotate-3" style={{color: style.text, textShadow: `2px 2px 0 ${style.accent}`}}>STREET</div></>;
+              case 'collage': return <><div className="absolute top-3 left-3 w-8 h-6 bg-orange-200/80 rotate-3"/><div className="absolute bottom-3 right-3 text-[7px] font-mono" style={{color: style.text}}>cut</div></>;
+              case 'watercolor': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-10 rounded-full opacity-30" style={{backgroundColor: style.accent, filter: 'blur(8px)'}}/><div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[8px]" style={{color: style.text, fontFamily: 'cursive'}}>Water</div></>;
+              case 'neon_sign': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px]" style={{color: style.text, textShadow: `0 0 10px ${style.text}, 0 0 20px ${style.text}`, fontFamily: 'cursive'}}>Open</div></>;
+              case 'risograph': return <><div className="absolute top-3 left-3 w-10 h-10 rounded-full" style={{backgroundColor: style.accent, mixBlendMode: 'multiply'}}/><div className="absolute top-5 left-5 w-10 h-10 rounded-full" style={{backgroundColor: style.text, mixBlendMode: 'multiply', opacity: 0.5}}/></>;
+              case 'abstract_creative': return <><div className="absolute top-4 right-4 w-8 h-8 rounded-full" style={{backgroundColor: style.accent+'40'}}/><div className="absolute bottom-6 left-6 w-12 h-4" style={{backgroundColor: style.accent+'60'}}/></>;
+              case 'comic_creative': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-2 py-1 bg-white border-2 rounded" style={{borderColor: style.text}}><span className="text-[8px] font-bold" style={{color: style.text}}>BOOM!</span></div></>;
+              case 'sticker': return <>{['😀','⭐','❤️'].map((e,i)=><div key={i} className="absolute text-sm" style={{top: 10+i*12, left: 10+i*15}}>{e}</div>)}</>;
+              case 'paper_cutout': return <><div className="absolute top-0 right-0 w-24 h-24 bg-blue-100 rounded-full shadow-lg translate-x-4 -translate-y-4"/><div className="absolute top-2 right-2 w-16 h-16 bg-amber-200 rounded-full shadow-md"/><div className="absolute bottom-2 left-2 text-[8px] font-black" style={{color: style.text}}>CUTOUT</div></>;
+              case 'digital_glitch': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] font-black tracking-widest text-white" style={{textShadow: '2px 0 #FF00FF, -2px 0 #00FFFF'}}>GLITCH</div></>;
+              case 'kinetic_poster': return <><div className="absolute inset-0 flex flex-col justify-center overflow-hidden leading-[0.8]"><div className="text-[14px] font-black text-white/40 -ml-2 whitespace-nowrap">KINETIC KINETIC</div><div className="text-[18px] font-black text-white ml-1 whitespace-nowrap" style={{transform: 'scaleY(1.5)'}}>KINETIC KINETIC</div></div></>;
+              case 'impasto': return <><div className="absolute top-1/4 left-1/4 w-12 h-4 bg-orange-600 rounded-full blur-[1px] rotate-12"/><div className="absolute bottom-2 right-2 text-[7px] font-serif font-bold italic" style={{color: style.text}}>Gogh</div></>;
+              case 'airbrush_dream': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-purple-400/50 rounded-full blur-xl"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px]" style={{fontFamily: 'cursive', color: style.text, textShadow: '0 0 4px #fff'}}>Dream</div></>;
+
+              case 'academic': return <><div className="absolute top-4 left-4 right-4 h-1 rounded" style={{backgroundColor: style.text+'30'}}/><div className="absolute bottom-3 right-3 text-[6px]" style={{color: style.accent}}>p.1</div></>;
+              case 'history': return <><div className="absolute inset-3 border" style={{borderColor: style.accent+'40'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] font-serif" style={{color: style.text}}>History</div></>;
+              case 'science': return <><div className="absolute top-2 left-2 text-[6px] font-mono" style={{color: style.accent}}>{'>'} LAB</div><div className="absolute bottom-3 right-3 w-8 h-5 border rounded" style={{borderColor: style.accent}}><div className="absolute bottom-0 left-0 right-0 h-1/2" style={{backgroundColor: style.accent+'40'}}/></div></>;
+              case 'math': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] font-mono" style={{color: style.text}}>∑∞</div></>;
+              case 'thesis': return <><div className="absolute top-3 left-1/2 -translate-x-1/2 w-8 h-1" style={{backgroundColor: style.accent}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[7px] font-serif text-center" style={{color: style.text}}>THESIS</div></>;
+              case 'encyclopedia': return <><div className="absolute top-3 left-3 w-1 h-10" style={{backgroundColor: style.accent}}/><div className="absolute bottom-3 right-3 text-[6px]" style={{color: style.text}}>Vol.1</div></>;
+              case 'anatomy': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-10 border border-red-900/30 rounded-full"/><div className="absolute top-1/2 left-1/2 w-6 h-px bg-red-900/40 -translate-y-1/2 rotate-45"/><div className="absolute bottom-2 right-2 text-[5px] font-serif italic" style={{color: style.text}}>Fig. 1</div></>;
+              case 'astronomy': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 border border-yellow-300/30 rounded-full border-dashed"/><div className="absolute bottom-4 right-4 w-1.5 h-1.5 bg-yellow-200 rounded-full shadow-[0_0_4px_#fde047]"/></>;
+              case 'philosophy': return <><div className="absolute top-1 left-2 text-2xl font-serif" style={{color: style.accent}}>“</div><div className="absolute bottom-2 right-3 text-[6px] font-serif" style={{color: style.text}}>Kant</div></>;
+              case 'chemistry': return <><svg className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8" viewBox="0 0 100 100"><polygon points="50,10 85,30 85,70 50,90 15,70 15,30" fill="none" stroke={style.accent} strokeWidth="4"/></svg><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] font-bold" style={{color: style.text}}>O</div></>;
+              case 'geology': return <><div className="absolute bottom-0 left-0 right-0 h-3" style={{backgroundColor: '#78350F'}}/><div className="absolute bottom-3 left-0 right-0 h-2" style={{backgroundColor: '#9A3412'}}/><div className="absolute bottom-5 left-0 right-0 h-4" style={{backgroundColor: '#D6D3D1'}}/><div className="absolute top-2 left-2 text-[6px] font-bold" style={{color: style.text}}>STRATA</div></>;
+              case 'linguistics': return <><div className="absolute top-3 left-1/2 -translate-x-1/2 w-px h-8 bg-gray-300"/><div className="absolute top-3 left-2 text-[7px] font-bold" style={{color: style.text}}>word</div><div className="absolute top-5 left-2 text-[5px]" style={{color: style.accent}}>/wɜːrd/</div></>;
+              case 'economics': return <><div className="absolute bottom-2 left-2 right-2 h-px bg-gray-400"/><svg className="absolute top-2 left-2 w-12 h-8" viewBox="0 0 100 100" preserveAspectRatio="none"><polyline points="0,100 30,70 60,80 100,20" fill="none" stroke={style.accent} strokeWidth="4"/></svg></>;
+              case 'archaeology': return <><div className="absolute inset-0" style={{backgroundImage: 'linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)', backgroundSize: '10px 10px', opacity: 0.1}}/><div className="absolute bottom-2 right-2 w-8 h-1 bg-white/50 border flex"><div className="flex-1 bg-black/40"/></div></>;
+              case 'computer_science': return <><div className="absolute top-2 left-2 text-[6px] font-serif font-bold" style={{color: style.text}}>1. Intro</div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[12px] font-serif" style={{color: style.accent}}>$\sum$</div><div className="absolute bottom-2 left-2 w-10 h-0.5 bg-gray-200"/></>;
+
+              case 'cartoon': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-2 py-0.5 bg-white border-2 rounded" style={{borderColor: style.text}}><span className="text-[8px] font-bold" style={{color: style.text}}>POW!</span></div><div className="absolute bottom-2 right-2 text-base">💥</div></>;
+              case 'anime': return <><div className="absolute top-3 right-3">✨</div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-bold" style={{color: style.text}}>アニメ</div></>;
+              case 'clay': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full" style={{backgroundColor: style.accent, boxShadow: '3px 5px 10px rgba(0,0,0,0.2)'}}/></>;
+              case 'lowpoly': return <><svg className="absolute bottom-2 right-2 w-10 h-10" viewBox="0 0 40 40"><polygon points="20,5 35,35 5,35" fill={style.accent} opacity="0.8"/></svg></>;
+              case 'chibi': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xl">🥺</div></>;
+              case 'webtoon': return <><div className="absolute top-3 left-3 right-3 h-4 border rounded" style={{borderColor: style.text+'40'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[7px]" style={{color: style.text}}>Webtoon</div></>;
+              case 'doodle': return <><div className="absolute inset-0 opacity-10" style={{backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 8px, #ccc 8px, #ccc 9px)'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px]" style={{color: style.text, fontFamily: 'cursive'}}>doodle</div></>;
+              case 'cartoon_retro': return <><div className="absolute inset-0 opacity-10" style={{backgroundColor: '#D2691E'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] font-bold" style={{color: style.text}}>Disney</div></>;
+              case 'manga': return <><div className="absolute inset-0 opacity-20" style={{background: 'repeating-linear-gradient(45deg, #000 0, #000 1px, transparent 1px, transparent 4px)'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-2 py-1 bg-white border-2 border-black rounded-lg" style={{borderRadius: '10px 10px 10px 0'}}><span className="text-[6px] font-black">!!</span></div></>;
+              case 'pop_art': return <><div className="absolute inset-0 opacity-30" style={{radialGradient: 'radial-gradient(circle, #38BDF8 2px, transparent 2px)', backgroundSize: '6px 6px'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-2 py-1 bg-yellow-300 border-[3px] border-black shadow-[2px_2px_0_#000]"><span className="text-[8px] font-black text-black">POP</span></div></>;
+              case 'pastel_kawaii': return <><div className="absolute top-2 right-2 text-[14px]">✨</div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] font-bold" style={{color: style.text, textShadow: '1px 1px 0 #fff'}}>Kawaii</div></>;
+              case 'cel_shading': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-emerald-400 rounded-full overflow-hidden border-2 border-emerald-900"><div className="absolute top-0 right-0 w-full h-full bg-emerald-600 rounded-full translate-x-3 translate-y-3"/></div></>;
+              case 'graphic_novel': return <><div className="absolute top-0 left-0 w-full h-1/2 bg-red-900/80 -skew-y-6 transform origin-top-left"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] font-black tracking-widest text-white">SIN</div></>;
+              case 'retro_anime_90s': return <><div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-pink-500/80 to-transparent"/><div className="absolute top-2 right-3 w-4 h-4 bg-white rounded-full shadow-[0_0_10px_#fff]"/><div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[5px] text-white font-bold">90s 셀 애니</div></>;
+              case 'paper_mache': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-orange-500 rounded-full shadow-[4px_4px_5px_rgba(0,0,0,0.5)]"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] text-white">Clay</div></>;
+
+              case 'blueprint': return <><div className="absolute inset-2 border border-dashed" style={{borderColor: style.accent+'60'}}/><div className="absolute bottom-2 right-2 text-[6px] font-mono" style={{color: style.accent}}>A-01</div></>;
+              case 'circuit': return <><div className="absolute top-3 left-3 w-2 h-2 rounded-full" style={{backgroundColor: style.accent}}/><div className="absolute bottom-3 right-3 w-3 h-3 border" style={{borderColor: style.text}}/></>;
+              case 'infographic': return <><div className="absolute bottom-3 left-3 right-3 flex gap-1 items-end h-6"><div className="flex-1 h-full rounded-t" style={{backgroundColor: style.accent+'40'}}/><div className="flex-1 h-1/2 rounded-t" style={{backgroundColor: style.accent}}/></div></>;
+              case 'map': return <><div className="absolute top-3 left-3 w-3 h-3 rounded-full border-2" style={{borderColor: style.accent}}/><div className="absolute bottom-3 right-3 text-[6px]" style={{color: style.text}}>MAP</div></>;
+              case 'dashboard': return <><div className="absolute top-3 left-3 right-3 h-6 rounded" style={{backgroundColor: '#27272a'}}/><div className="absolute bottom-3 right-3 w-3 h-3 rounded-full" style={{backgroundColor: style.accent}}/></>;
+              case 'code': return <><div className="absolute top-3 left-3 text-[6px] font-mono" style={{color: '#569CD6'}}>const</div><div className="absolute bottom-3 right-3 text-[5px] font-mono" style={{color: style.text+'60'}}>main.js</div></>;
+              case 'terminal': return <><div className="absolute top-3 left-3 text-[7px] font-mono" style={{color: style.text}}>$ run</div><div className="absolute top-5 left-3 w-2 h-3" style={{backgroundColor: style.text}}/></>;
+              case 'diagram': return <><div className="absolute top-4 left-4 w-6 h-4 border rounded" style={{borderColor: style.accent}}/><div className="absolute top-6 left-10 w-4 h-px" style={{backgroundColor: style.accent}}/></>;
+              case 'wire_hologram': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 border border-sky-400 rotate-12 shadow-[0_0_8px_#38bdf8]"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[5px] text-sky-200 font-mono">SYS</div></>;
+              case 'server_rack': return <><div className="absolute inset-2 border-2 border-zinc-700 p-0.5"><div className="w-full h-2 bg-zinc-800 flex items-center px-1"><div className="w-1 h-1 bg-green-500 rounded-full"/></div></div></>;
+              case 'api_docs': return <><div className="absolute top-2 left-2 right-2 h-4 border border-blue-200 bg-blue-50 rounded flex items-center px-1"><span className="px-1 bg-blue-500 text-white text-[4px] font-bold rounded">GET</span></div></>;
+              case 'radar_sonar': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 border border-green-500/50 rounded-full"/><div className="absolute top-1/2 left-1/2 w-6 h-6 bg-gradient-to-tr from-green-400/40 to-transparent rounded-tr-full origin-bottom-left"/></>;
+              case 'cad_model': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-slate-300 rotate-45 border-orange-500 shadow-md"/><div className="absolute bottom-2 left-2 text-[5px] text-orange-600 font-mono">X Y Z</div></>;
+              case 'data_viz': return <><div className="absolute top-3 left-4 w-1.5 h-1.5 bg-purple-400 rounded-full"/><svg className="absolute inset-0 w-full h-full"><line x1="20%" y1="30%" x2="80%" y2="40%" stroke="#a855f7" strokeWidth="0.5"/></svg></>;
+              case 'aviation': return <><div className="absolute top-0 w-full h-1/2 bg-blue-900/80"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-px bg-green-500"/></>;
+
+              case 'sketch': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px]" style={{color: style.text, fontFamily: 'cursive'}}>idea!</div></>;
+              case 'vintage_paper': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] font-mono" style={{color: style.text}}>1924</div></>;
+              case 'origami': return <><svg className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10" viewBox="0 0 40 40"><polygon points="20,5 35,30 5,30" fill={style.accent}/></svg></>;
+              case 'embroidery': return <><div className="absolute inset-3 border-2" style={{borderColor: style.accent, borderStyle: 'dotted'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[7px]" style={{color: style.text}}>✿ stitch</div></>;
+              case 'woodblock': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] font-bold" style={{color: style.accent}}>版</div></>;
+              case 'letterpress': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] font-bold" style={{color: style.text}}>PRESS</div></>;
+              case 'scrapbook': return <><div className="absolute top-2 left-2 w-8 h-8 bg-white p-1 shadow-md rotate-[-5deg]"><div className="w-full h-full bg-gray-200"/></div><div className="absolute top-1 left-4 w-6 h-2 bg-red-400/50 rotate-[-10deg]"/> <div className="absolute bottom-1 right-2 text-[5px]">Travel</div></>;
+              case 'stained_glass': return <><svg className="absolute inset-0 w-full h-full"><polygon points="0,0 50,40 0,100" fill="#ec4899" opacity="0.4" stroke="#171717" strokeWidth="2"/><polygon points="50,40 100,0 100,100" fill="#3b82f6" opacity="0.4" stroke="#171717" strokeWidth="2"/><polygon points="0,100 50,40 100,100" fill="#eab308" opacity="0.6" stroke="#171717" strokeWidth="2"/></svg></>;
+              case 'leather_craft': return <><div className="absolute inset-2 border-2 border-dashed border-amber-600/50 rounded-sm"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-2 py-0.5 border border-amber-700/30 rounded text-[5px] font-serif font-bold text-amber-900">LEATHER</div></>;
+              case 'knitting': return <><div className="absolute inset-0 opacity-30" style={{background: 'repeating-linear-gradient(45deg, transparent, transparent 4px, #fda4af 4px, #fda4af 6px)'}}/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] font-bold text-rose-800">KNIT</div></>;
+              case 'kintsugi': return <><div className="absolute top-0 right-0 w-12 h-12 bg-zinc-800 rounded-bl-full"/><svg className="absolute top-0 right-0 w-12 h-12"><path d="M12,0 Q8,6 4,12" stroke="#D4AF37" strokeWidth="1" fill="none"/></svg><div className="absolute bottom-2 left-2 text-[6px] font-serif" style={{color: style.text}}>Kintsugi</div></>;
+              case 'chalkboard': return <><div className="absolute inset-2 border border-white/30 border-dashed"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] text-white/90" style={{fontFamily: 'cursive'}}>Menu</div></>;
+              case 'patchwork': return <><div className="absolute inset-2 grid grid-cols-2 grid-rows-2 gap-0.5 bg-sky-600 p-0.5"><div className="bg-amber-100"/><div className="bg-rose-100"/><div className="bg-sky-100"/><div className="bg-emerald-100"/></div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[6px] font-bold bg-white/80 px-1">QUILT</div></>;
+              case 'paper_quilling': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 border-2 border-pink-400 rounded-full shadow-md"/></>;
+              case 'resin_art': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-8 bg-sky-200/50 rounded-[40%_60%_70%_30%] shadow-lg backdrop-blur-sm"/><div className="absolute top-1/2 left-1/2 text-[8px]">✨</div></>;
+
+              case 'secret': return <><div className="absolute top-2 left-1/2 -translate-x-1/2 px-1 py-0.5 border text-[5px] font-bold tracking-widest" style={{borderColor: style.accent, color: style.accent}}>TOP SECRET</div></>;
+              case 'warning': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xl">⚠️</div></>;
+              case 'kid': return <><div className="absolute top-3 right-3 text-lg">🌈</div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px]" style={{color: style.text, fontFamily: 'cursive'}}>꿈</div></>;
+              case 'bsod': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[14px] font-black tracking-tighter text-slate-300">BSOD</div></>;
+              case 'win95': return <><div className="absolute top-0 left-0 right-0 h-4 flex items-center px-1 gap-1" style={{backgroundColor: '#000080'}}><span className="text-[6px] text-white">Window</span></div><div className="absolute bottom-2 right-2 px-1 py-0.5 text-[6px]" style={{backgroundColor: style.accent}}>OK</div></>;
+              case 'loading': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-2 border" style={{borderColor: style.accent}}><div className="h-full w-3/4" style={{backgroundColor: style.accent}}/></div></>;
+              case 'receipt': return <><div className="absolute top-4 left-3 text-[5px] font-mono" style={{color: style.text}}>ITEM......$9.99</div></>;
+              case 'meme': return <><div className="absolute top-2 left-1/2 -translate-x-1/2 text-[8px] font-bold text-center" style={{color: style.text, textShadow: '1px 1px 0 #fff'}}>TOP TEXT</div></>;
+              case 'wanted_poster': return <><div className="absolute top-2 left-1/2 -translate-x-1/2 text-[10px] font-black text-amber-900 tracking-tighter">WANTED</div><div className="absolute top-6 left-1/2 -translate-x-1/2 w-8 h-6 border border-amber-900/50 flex items-center justify-center"><div className="w-4 h-4 bg-amber-900/20 rounded-full"/></div><div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[6px] font-bold text-amber-900">$1,000,000</div></>;
+              case 'tarot_card': return <><div className="absolute inset-1 border border-amber-600 rounded-sm"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-lg text-yellow-300">☀️</div></>;
+              case 'board_game': return <><div className="absolute top-1/2 left-2 text-[6px] font-bold">START</div><div className="absolute top-2 left-2 w-4 h-4 bg-red-400 border border-black"/> </>;
+              case 'casino': return <><div className="absolute inset-1 border-2 border-dotted border-yellow-400 rounded-sm"/><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-lg">🎰</div></>;
+              case 'comic_sans': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] font-bold rotate-[-10deg] tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-red-500 via-green-500 to-blue-500" style={{fontFamily: 'Comic Sans MS, cursive'}}>WordArt</div></>;
+              case 'pop_up_book': return <><div className="absolute top-4 left-4 w-10 h-6 bg-blue-400 shadow-xl skew-y-12 origin-bottom-left"/><div className="absolute top-1/2 right-2 text-[6px] font-bold" style={{color: style.text}}>POP UP</div></>;
+              case 'error_404': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[14px] font-black tracking-tighter text-slate-300">404</div></>;
+
+              case 'insta_feed': return <><div className="absolute top-6 left-1/2 -translate-x-1/2 w-10 h-10 bg-gray-200 border border-gray-300"/><div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[3px] font-bold text-blue-500 whitespace-nowrap">#o #t #t #f #f</div></>;
+              case 'streaming_ux': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[16px] font-black text-[#E50914] tracking-tighter">N</div></>;
+              case 'music_player': return <><div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-8 bg-zinc-800 rounded-sm shadow-lg"/><div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[5px]">▶</div></>;
+              case 'messenger_chat': return <><div className="absolute top-2 right-2 w-8 h-4 bg-blue-500 rounded-lg rounded-br-sm shadow-sm"/><div className="absolute top-7 left-2 w-6 h-4 bg-gray-300 text-gray-600">...</div></>;
+              case 'notion_workspace': return <><div className="absolute top-2 left-2 text-xs">📄</div><div className="absolute top-6 left-2 text-[6px] font-bold text-gray-800">Notion</div></>;
+              case 'yt_thumbnail': return <><div className="absolute inset-0 bg-zinc-800 flex items-center justify-center overflow-hidden"><div className="text-[14px] font-black text-white italic rotate-[-5deg]" style={{textShadow: '2px 2px 0 #000'}}>OMG!</div></div></>;
+              case 'reels_shortform': return <><div className="absolute bottom-3 right-5 text-[6px] flex flex-col gap-0.5 opacity-80">🤍<br/>💬</div></>;
+              case 'twitch_stream': return <><div className="absolute inset-0 border-[3px] border-purple-600/50"/><div className="absolute top-1 left-1 w-6 h-4 bg-zinc-800 border border-purple-400 shadow-[0_0_5px_#9146ff]"/></>;
+              case 'podcast_audio': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-0.5"><div className="w-1 h-3 bg-purple-500 rounded-full"/><div className="w-1 h-6 bg-purple-400 rounded-full"/><div className="w-1 h-2 bg-purple-600 rounded-full"/></div></>;
+              case 'vlog_diary': return <><div className="absolute top-2 left-2 flex items-center gap-1"><div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"/><span className="text-[5px] font-mono font-bold text-red-500">REC</span></div></>;
+              case 'y2k_highteen': return <><div className="absolute bottom-3 left-3 text-[10px] font-bold text-pink-600 rotate-[-10deg]" style={{fontFamily: 'Comic Sans MS, cursive'}}>xoxo</div></>;
+              case 'kpop_polco': return <><div className="absolute inset-2 bg-white rounded-sm shadow-md border-2 border-green-100 flex items-center justify-center"><div className="w-8 h-8 bg-green-50 rounded-sm"/></div></>;
+              case 'lofi_chill': return <><div className="absolute inset-0 bg-gradient-to-t from-purple-900 via-purple-700 to-orange-400"/><div className="absolute bottom-2 left-2 text-[6px] text-white font-mono opacity-80">Lo-Fi</div></>;
+              case 'metaverse_vtuber': return <><div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-10 bg-cyan-400/50 rounded-t-full blur-md shadow-xl"/><div className="absolute top-2 left-2 text-[5px] font-black text-cyan-200">LIVE</div></>;
+              case 'dating_app': return <><div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-3"><div className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center text-[6px] font-bold text-white shadow-sm">X</div><div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center text-[6px] font-bold text-white shadow-sm">♥</div></div></>;
+              case 'street_webzine': return <><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[11px] font-black text-[#D9F99D] uppercase tracking-tighter">HYPE</div></>;
+              case 'digital_newsletter': return <><div className="absolute top-2 left-2 w-10 h-1 bg-blue-600"/><div className="absolute top-4 left-2 text-[6px] font-serif font-bold text-gray-800">Newsletter</div></>;
+              case 'link_in_bio': return <><div className="absolute top-1 left-1/2 -translate-x-1/2 w-4 h-4 bg-emerald-500 rounded-full shadow-sm"/><div className="absolute top-6 left-1/2 -translate-x-1/2 w-12 h-2 bg-emerald-500 rounded-full shadow-sm"/></>;
+              case 'community_thread': return <><div className="absolute top-2 left-4 w-10 h-3 bg-white border border-gray-300 rounded-sm shadow-sm"/><div className="absolute top-2 left-1 text-[4px] text-orange-500 font-bold">▲</div></>;
+              case 'pinterest_moodboard': return <><div className="absolute top-1 left-1 w-6 h-8 bg-zinc-200 rounded-md shadow-sm"/><div className="absolute top-1 right-1 w-6 h-5 bg-zinc-300 rounded-md shadow-sm"/></>;
+
+              default: return <><div className="absolute top-4 left-4 right-8 h-2 rounded" style={{backgroundColor: style.text, opacity: 0.8}}/><div className="absolute top-8 left-4 right-12 h-1 rounded" style={{backgroundColor: style.text, opacity: 0.4}}/></>;
+            }
+          };
+
+          return (
+            <div className="aspect-video rounded-lg overflow-hidden relative pointer-events-none" style={{ backgroundColor: style.bg }}>
+              {renderElements()}
+            </div>
+          );
+        };
+
+        // ===== PROMPT PANEL (하단 패널) =====
+        const PromptPanel = ({ template, onClose }) => {
+          const [copied, setCopied] = useState(false);
+          const prompt = generatePrompt(template);
+
+          const handleCopy = () => {
+            const textToCopy = prompt;
+            let success = false;
+
+            try {
+                const textArea = document.createElement("textarea");
+                textArea.value = textToCopy;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-9999px";
+                textArea.style.top = "-9999px";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                success = document.execCommand('copy');
+                document.body.removeChild(textArea);
+            } catch (err) {
+                console.error('execCommand copy failed', err);
+            }
+
+            if (!success && navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(textToCopy)
+                    .then(() => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                    })
+                    .catch((err) => {
+                        console.error('Clipboard API failed', err);
+                    });
+                return;
+            }
+
+            if (success) {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            }
+          };
+
+          return (
+            <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
+              <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-10 h-7 rounded border border-zinc-600"
+                    style={{ backgroundColor: template.style.bg }}
+                  />
+                  <div>
+                    <div className="text-sm font-bold text-white">{template.name}</div>
+                    <div className="text-xs text-zinc-500">{template.category}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="w-10 h-10 rounded-full bg-zinc-800 text-white text-xl flex items-center justify-center hover:bg-zinc-700 transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="flex-1 p-4 overflow-hidden">
+                <textarea
+                  readOnly
+                  value={prompt}
+                  className="w-full h-full bg-zinc-900 text-zinc-300 text-xs font-mono p-4 rounded-xl border border-zinc-700 resize-none focus:outline-none"
+                  style={{ lineHeight: '1.6' }}
+                />
+              </div>
+
+              <div className="p-4 border-t border-zinc-800">
+                <button
+                  onClick={handleCopy}
+                  className={`w-full py-4 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-colors ${
+                    copied ? 'bg-green-600 text-white' : 'bg-white text-black hover:bg-gray-200'
+                  }`}
+                >
+                  {copied ? '✓ 복사됨!' : '📋 프롬프트 복사'}
+                </button>
+              </div>
+            </div>
+          );
+        };
+
+        // ===== MAIN APP =====
+        function NotebookLMBuilder() {
+          const [selectedCategory, setSelectedCategory] = useState('전체');
+          const [selectedTemplate, setSelectedTemplate] = useState(null);
+          const [searchQuery, setSearchQuery] = useState('');
+
+          const filteredTemplates = useMemo(() => {
+            const filtered = TEMPLATES.filter(t => {
+              const matchCategory = selectedCategory === '전체' || t.category === selectedCategory;
+              const matchSearch = !searchQuery || t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.mood.toLowerCase().includes(searchQuery.toLowerCase());
+              return matchCategory && matchSearch;
+            });
+            return filtered.sort((a, b) => a.name.localeCompare(b.name, 'ko-KR'));
+          }, [selectedCategory, searchQuery]);
+
+          const categoryCount = useMemo(() => {
+            const counts = { '전체': TEMPLATES.length };
+            TEMPLATES.forEach(t => { counts[t.category] = (counts[t.category] || 0) + 1; });
+            return counts;
+          }, []);
+
+          return (
+            <div className="min-h-screen bg-zinc-950 text-white font-sans">
+              <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800">
+                <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+                  <div className="font-bold text-xs sm:text-sm whitespace-nowrap shrink-0">
+                    NotebookLM PPT Design Prompt
+                  </div>
+                  
+                  <div className="hidden md:block w-full max-w-md px-4">
+                    <div className="relative w-full">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                      <input type="text" placeholder="검색..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm focus:outline-none focus:border-violet-500 transition-colors" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <a href="https://notebooklm.google.com/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white rounded-full text-xs font-bold hover:bg-violet-500 transition-colors">
+                      <ExternalLink className="w-3 h-3 hidden sm:block" /> <span className="hidden sm:inline">NotebookLM 열기</span><span className="sm:hidden">열기</span>
+                    </a>
+                    <a href="https://www.slidedeckcleaner.com/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 text-white rounded-full text-xs font-bold hover:bg-zinc-700 transition-colors">
+                      <span>🧹</span> <span className="hidden sm:inline">워터마크 제거</span><span className="sm:hidden">제거</span>
+                    </a>
+                  </div>
+                </div>
+                
+                <div className="md:hidden px-4 pb-3">
+                  <div className="relative w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                    <input type="text" placeholder="검색..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm focus:outline-none focus:border-violet-500 transition-colors" />
+                  </div>
+                </div>
+              </header>
+
+              <div className="max-w-7xl mx-auto px-4 mt-6 mb-4">
+                <div className="flex flex-wrap gap-2">
+                  {CATEGORIES.map(cat => (
+                    <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${selectedCategory === cat ? 'bg-white text-black' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'}`}>
+                      {cat} <span className="opacity-60 ml-1">{categoryCount[cat]}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <main className="max-w-7xl mx-auto px-4 pb-8">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                  {filteredTemplates.map(template => (
+                    <button key={template.id} onClick={() => setSelectedTemplate(template)} className="text-left group focus:outline-none">
+                      <div className="transition-transform duration-200 group-hover:-translate-y-1 group-hover:shadow-lg shadow-black/50">
+                        <StyleThumbnail template={template} />
+                      </div>
+                      <div className="mt-2 px-0.5">
+                        <h3 className="text-xs font-bold text-white group-hover:text-violet-400 truncate transition-colors">{template.name}</h3>
+                        <p className="text-[10px] text-zinc-500 truncate mt-0.5">{template.category}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                {filteredTemplates.length === 0 && (
+                  <div className="text-center py-16">
+                    <Grid3X3 className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
+                    <p className="text-zinc-500 text-sm">검색 결과가 없습니다</p>
+                  </div>
+                )}
+              </main>
+
+              {selectedTemplate && <PromptPanel template={selectedTemplate} onClose={() => setSelectedTemplate(null)} />}
+
+              <style>{`
+                .no-scrollbar::-webkit-scrollbar { display: none; }
+                .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+              `}</style>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<NotebookLMBuilder />);
+    </script>
+</body>
+</html>
